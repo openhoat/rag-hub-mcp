@@ -1,0 +1,10 @@
+.idea/
+.opencode/
+
+# Generated artifacts — build, coverage and sonar all live under dist/
+dist/
+node_modules/
+
+.env
+.env.local
+*.db
