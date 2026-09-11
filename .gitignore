@@ -1,0 +1,15 @@
+.idea/
+.opencode/
+
+# Generated artifacts — build, coverage and sonar all live under dist/
+dist/
+node_modules/
+
+# VitePress docs build
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+
+.env
+.env.local
+*.db
