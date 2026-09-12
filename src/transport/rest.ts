@@ -1,5 +1,6 @@
 import cors from '@fastify/cors'
 import fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
+import { z } from 'zod'
 import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import { getLogger } from '../log.js'
@@ -24,7 +25,12 @@ const auth = (req: FastifyRequest, reply: FastifyReply): boolean => {
   return true
 }
 
-type AddBody = { path?: string; content?: unknown }
+const addBodySchema = z.object({
+  path: z.string(),
+  content: z.string(),
+})
+
+type AddBody = z.infer<typeof addBodySchema>
 
 export const createRestApp = (store: Store) => {
   const app = fastify({ bodyLimit: 10 * 1024 * 1024 })
@@ -50,14 +56,22 @@ export const createRestApp = (store: Store) => {
   app.post<{ Params: { kb: string }; Body: AddBody }>('/admin/kbs/:kb/documents', async (req, reply) => {
     if (!auth(req, reply)) return
     const { kb } = req.params
-    const { path: relPath, content } = req.body
-    if (!relPath || content === undefined) {
-      reply.code(400).send({ error: 'path and content required' })
+    const parsed = addBodySchema.safeParse(req.body)
+    if (!parsed.success) {
+      reply.code(400).send({ error: 'path and content must be strings' })
       return
     }
-    const safePath = relPath.replaceAll('../', '').replace(/^\/+/, '')
-    await addDocument(store, kb, safePath, content as string)
-    reply.send({ status: 'added', kb, path: safePath })
+    const { path: relPath, content } = parsed.data
+    try {
+      await addDocument(store, kb, relPath, content)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'invalid path') {
+        reply.code(400).send({ error: 'invalid path' })
+        return
+      }
+      throw err
+    }
+    reply.send({ status: 'added', kb, path: relPath })
   })
 
   app.delete<{ Params: { kb: string; '*': string } }>('/admin/kbs/:kb/documents/*', async (req, reply) => {
