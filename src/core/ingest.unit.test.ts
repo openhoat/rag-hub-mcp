@@ -91,6 +91,14 @@ describe('addDocument', () => {
     const kbs = store.listKbs()
     expect(kbs.find(k => k.name === 'docs')?.docCount).toBe(1)
   })
+
+  test('should reject paths escaping the KB root', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    await expect(addDocument(store, 'docs', '../outside.md', 'x', root)).rejects.toThrow('invalid path')
+    await expect(addDocument(store, 'docs', 'a/../../../escape.md', 'x', root)).rejects.toThrow('invalid path')
+  })
 })
 
 describe('deleteDocument', () => {

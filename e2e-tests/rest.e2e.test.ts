@@ -100,20 +100,18 @@ describe('REST API (real store + ingest + search)', () => {
     expect(body).toEqual([])
   })
 
-  test('should sanitize path traversal in document creation', async () => {
+  test('should reject path traversal in document creation', async () => {
     const addRes = await fetch(`${base}/admin/kbs/docs/documents`, {
       method: 'POST',
       headers: { ...AUTH, ...JSON_HEADERS },
       body: JSON.stringify({ path: '../../evil.md', content: 'escaped content' }),
     })
-    expect(addRes.status).toBe(200)
-    const addBody = (await addRes.json()) as { path: string }
-    expect(addBody.path).toBe('evil.md')
+    expect(addRes.status).toBe(400)
 
-    // The document must be indexed under the KB root, not escape it.
+    // The document must not be indexed under the KB root.
     const docsRes = await fetch(`${base}/admin/kbs/docs/documents`, { headers: AUTH })
     const docs = (await docsRes.json()) as Array<{ relPath: string }>
-    expect(docs.some(d => d.relPath === 'evil.md')).toBe(true)
+    expect(docs.some(d => d.relPath === 'evil.md')).toBe(false)
   })
 
   test('should require auth on admin endpoints', async () => {

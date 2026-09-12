@@ -43,14 +43,14 @@ describe('handleToolCall', () => {
     expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('result snippet') })
   })
 
-  test('should add a document with sanitized path', async () => {
+  test('should add a document passing the raw path through for containment check', async () => {
     const result = await handleToolCall(store(), 'rag_add_document', {
       kb: 'kb',
       path: '../evil.md',
       content: 'x',
     })
-    expect(mockedAdd).toHaveBeenCalledWith(expect.anything(), 'kb', 'evil.md', 'x')
-    expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('evil.md') })
+    expect(mockedAdd).toHaveBeenCalledWith(expect.anything(), 'kb', '../evil.md', 'x')
+    expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('../evil.md') })
   })
 
   test('should delete a document', async () => {

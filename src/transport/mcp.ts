@@ -133,9 +133,8 @@ ${r.content}`,
 
     case 'rag_add_document': {
       const { kb, path, content } = z.object(addDocArgs).parse(args)
-      const safePath = path.replaceAll('../', '').replace(/^\/+/, '')
-      await addDocument(store, kb, safePath, content)
-      return { content: [{ type: 'text', text: `Document added: **${kb}/${safePath}** — indexed and searchable.` }] }
+      await addDocument(store, kb, path, content)
+      return { content: [{ type: 'text', text: `Document added: **${kb}/${path}** — indexed and searchable.` }] }
     }
 
     case 'rag_delete_document': {

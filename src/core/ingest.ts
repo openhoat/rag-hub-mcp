@@ -7,6 +7,7 @@ import { chunkText } from '../pipeline/chunk.js'
 import { embedTexts } from '../pipeline/embed.js'
 import { extractText } from '../pipeline/extract.js'
 import type { IngestResult, Store } from '../types.js'
+import { sanitizeRelativePath } from './path.js'
 
 const logger = getLogger('ingest')
 
@@ -185,16 +186,14 @@ export const indexFile = async (
 export const addDocument = async (store: Store, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {
   const kbDir = join(root, kb)
   mkdirSync(kbDir, { recursive: true })
-  const fullPath = join(kbDir, relPath)
+  const fullPath = sanitizeRelativePath(root, kb, relPath)
   mkdirSync(dirname(fullPath), { recursive: true })
   writeFileSync(fullPath, content, 'utf-8')
   await scanAll(store, root)
 }
 
 export const deleteDocument = async (store: Store, kb: string, relPath: string, root: string = KB_ROOT) => {
-  const fullPath = join(root, kb, relPath)
-  const normalized = relative(root, fullPath)
-  if (normalized.startsWith('..')) throw new Error('invalid path')
+  const fullPath = sanitizeRelativePath(root, kb, relPath)
   if (existsSync(fullPath)) unlinkSync(fullPath)
 
   const kbId = store.getKbId(kb)
@@ -208,6 +207,8 @@ export const deleteDocument = async (store: Store, kb: string, relPath: string, 
 
 export const deleteKb = async (store: Store, kb: string, root: string = KB_ROOT) => {
   const kbDir = join(root, kb)
+  const normalized = relative(root, kbDir)
+  if (normalized === '' || normalized.startsWith('..')) throw new Error('invalid path')
   if (existsSync(kbDir)) rmSync(kbDir, { recursive: true, force: true })
   const kbId = store.getKbId(kb)
   if (kbId) {

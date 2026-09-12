@@ -26,6 +26,14 @@
 
 - [ ] Implementation
 
+### #9 [SECURITY] Enforce `relative()` containment check in `addDocument` (P1)
+
+- [x] Replace `replaceAll('../', '')` sanitization with `relative()` check in `src/core/ingest.ts` (same as `deleteDocument`)
+
+### #10 [SECURITY] Validate `content` is a string in REST add-document (P1)
+
+- [x] Replace `content as string` with Zod validation in `src/transport/rest.ts`
+
 ## In Progress
 
 ### #12 [DOCS] Update `architecture.md` Express references to Fastify

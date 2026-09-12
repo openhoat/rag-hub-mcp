@@ -83,7 +83,7 @@ describe('rest', () => {
     expect(body.results[0].relPath).toBe('f.md')
   })
 
-  test('POST /admin/kbs/:kb/documents should add and sanitize a path', async () => {
+  test('POST /admin/kbs/:kb/documents should add with raw path and string content', async () => {
     mockedAdd.mockResolvedValueOnce()
     const res = await fetch(`${base}/admin/kbs/docs/documents`, {
       method: 'POST',
@@ -91,7 +91,7 @@ describe('rest', () => {
       body: JSON.stringify({ path: '../evil.md', content: 'hello' }),
     })
     expect(res.status).toBe(200)
-    expect(mockedAdd).toHaveBeenCalledWith(expect.anything(), 'docs', 'evil.md', 'hello')
+    expect(mockedAdd).toHaveBeenCalledWith(expect.anything(), 'docs', '../evil.md', 'hello')
   })
 
   test('POST /admin/kbs/:kb/documents should reject missing path', async () => {
@@ -146,6 +146,25 @@ describe('rest', () => {
     expect(res.status).toBe(500)
     const body = (await res.json()) as { error: string }
     expect(body.error).toBe('internal error')
+  })
+
+  test('POST /admin/kbs/:kb/documents should reject non-string content', async () => {
+    const res = await fetch(`${base}/admin/kbs/docs/documents`, {
+      method: 'POST',
+      headers: { ...AUTH, ...JSON_HEADERS },
+      body: JSON.stringify({ path: 'x.md', content: { nested: 'object' } }),
+    })
+    expect(res.status).toBe(400)
+  })
+
+  test('POST /admin/kbs/:kb/documents should return 400 on invalid path', async () => {
+    mockedAdd.mockRejectedValueOnce(new Error('invalid path'))
+    const res = await fetch(`${base}/admin/kbs/docs/documents`, {
+      method: 'POST',
+      headers: { ...AUTH, ...JSON_HEADERS },
+      body: JSON.stringify({ path: '../evil.md', content: 'hello' }),
+    })
+    expect(res.status).toBe(400)
   })
 
   test('POST /admin/kbs/:kb/documents should return 500 when addDocument throws', async () => {
