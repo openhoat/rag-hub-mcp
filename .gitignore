@@ -6,6 +6,7 @@ dist/
 node_modules/
 .wireit/
 .vitest/
+.playwright-mcp/
 
 # VitePress build output & cache
 .vitepress/

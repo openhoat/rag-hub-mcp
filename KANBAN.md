@@ -18,10 +18,6 @@
 
 - [ ] Implementation
 
-### #5 [CHORE] GitHub CI: automate build + validate (`skills/setup-ci`)
-
-- [ ] Implementation
-
 ### #7 [FEAT] File-based document list via posit/download hook in the watch flow
 
 - [ ] Implementation
@@ -32,5 +28,4 @@
 
 ## In Progress
 
-- [#0] [FEAT] Initial implementation: rag-hub-mcp v1.0.0
-    - [x] Publish to npm registry (`rag-hub-mcp@0.0.1`)
+
