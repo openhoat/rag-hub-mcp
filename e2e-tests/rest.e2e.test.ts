@@ -22,7 +22,7 @@ describe('REST API (real store + ingest + search)', () => {
     restoreFetch = stubEmbeddingsApi(texts => texts.map(() => unitEmbeddings(4)))
     root = mkdtempSync(join(tmpdir(), 'rag-rest-'))
     store = createStore(join(root, 'rag.db'))
-    const started = await startHttpServer(createRestApp(store))
+    const started = await startHttpServer(await createRestApp(store))
     server = started.server
     base = started.base
   })

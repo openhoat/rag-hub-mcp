@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import './preload.js'
+import rateLimit from '@fastify/rate-limit'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
+import { SessionRegistry } from './core/sessionRegistry.js'
 import { createStore } from './core/store.js'
 import { getLogger } from './log.js'
 import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
@@ -22,6 +24,14 @@ const main = async (): Promise<void> => {
   const DB_PATH = process.env.DB_PATH || (isHttp ? '/data/index/rag.db' : './rag.db')
   const SCAN_INTERVAL = Number.parseInt(process.env.SCAN_INTERVAL || '300', 10)
   const MCP_API_KEY = process.env.MCP_API_KEY || ''
+  // Session lifecycle bounds (HTTP mode only). TTL seconds = idle cutoff: a
+  // client that disconnects without a closing POST /mcp leaves an orphaned
+  // session otherwise, which would leak memory. Max sessions caps concurrent
+  // clients when the rate-limited creation is not enough.
+  const MCP_SESSION_TTL_SECONDS = Number.parseInt(process.env.MCP_SESSION_TTL_SECONDS || '1800', 10)
+  const MCP_SESSION_MAX = Number.parseInt(process.env.MCP_SESSION_MAX || '100', 10)
+  // New-session creation rate limit (POST /mcp without Mcp-Session-Id).
+  const MCP_SESSION_CREATE_RATE_PER_MINUTE = Number.parseInt(process.env.MCP_SESSION_CREATE_RATE_PER_MINUTE || '30', 10)
 
   // Fail fast when HTTP mode is requested without an API key: without it the
   // REST admin endpoints, /search and /mcp would be exposed with no Bearer auth.
@@ -68,20 +78,31 @@ const main = async (): Promise<void> => {
   }
 
   // Fastify app (REST + streamable-http MCP on the same instance).
-  const app = createRestApp(store)
+  const app = await createRestApp(store)
 
   // MCP sessions: one McpServer + transport per client session (keyed by Mcp-Session-Id).
-  const sessions = new Map<string, { server: McpServer; transport: StreamableHTTPServerTransport }>()
+  // Registry enforces a max concurrent size and an idle TTL, purging orphaned
+  // sessions when a client disconnects without a closing POST /mcp.
+  const sessions = new SessionRegistry<{ server: McpServer; transport: StreamableHTTPServerTransport }>(
+    MCP_SESSION_MAX,
+    MCP_SESSION_TTL_SECONDS * 1000,
+  )
 
   const closeSession = (sessionId: string) => {
     const entry = sessions.get(sessionId)
     if (!entry) return
     sessions.delete(sessionId)
-    entry.transport.close().catch(() => {})
+    entry.value.transport.close().catch(() => {})
     logger.info(`MCP session closed: ${sessionId}`)
   }
 
-  app.post('/mcp', async (request, reply) => {
+  // Rate-limit MCP session *creation* (POST /mcp without a Mcp-Session-Id).
+  // Established sessions are unaffected so active clients never hit the cap.
+  // `global` limits only this route via the `onRoute` config hook; the plugin
+  // provides the `rateLimit` instance for it.
+  await app.register(rateLimit, { global: false, max: MCP_SESSION_CREATE_RATE_PER_MINUTE, timeWindow: 60_000 })
+
+  app.post('/mcp', { config: { rateLimit: { max: MCP_SESSION_CREATE_RATE_PER_MINUTE, timeWindow: 60_000 } } }, async (request, reply) => {
     if (MCP_API_KEY) {
       const auth = request.headers.authorization
       if (auth !== `Bearer ${MCP_API_KEY}`) {
@@ -95,14 +116,24 @@ const main = async (): Promise<void> => {
       // Take over the reply lifecycle before handing off the raw objects.
       reply.hijack()
       if (sessionId) {
-        // Existing session: route to its dedicated transport.
+        // Existing session: refresh its TTL and route to its dedicated transport.
         const entry = sessions.get(sessionId)
         if (entry) {
-          await entry.transport.handleRequest(request.raw, reply.raw, request.body)
+          sessions.touch(sessionId)
+          await entry.value.transport.handleRequest(request.raw, reply.raw, request.body)
           return
         }
         reply.raw.statusCode = 404
         reply.raw.end(JSON.stringify({ error: 'unknown session' }))
+        return
+      }
+
+      // Reject new sessions when the in-memory cap is reached instead of
+      // silently evicting an active client (which would break an in-flight
+      // RAG call). 503 signals the client to retry later.
+      if (!sessions.hasCapacity()) {
+        reply.raw.statusCode = 503
+        reply.raw.end(JSON.stringify({ error: 'too many MCP sessions' }))
         return
       }
 
@@ -144,6 +175,15 @@ const main = async (): Promise<void> => {
       ],
     })
   })
+
+  // Periodic TTL sweep: evict sessions idle beyond MCP_SESSION_TTL_SECONDS and
+  // close their transports, so a client that disconnects without a closing
+  // POST /mcp cannot leak memory indefinitely.
+  setInterval(() => {
+    const expired = sessions.purgeExpired()
+    for (const id of expired) closeSession(id)
+    if (expired.length > 0) logger.info(`evicted ${expired.length} stale MCP session(s)`)
+  }, 60_000).unref()
 
   // Start server
   await app.listen({ port: Number(PORT) })

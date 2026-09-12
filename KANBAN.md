@@ -40,4 +40,12 @@
 
 - [x] Replace "Express" with "Fastify" in docs/guide/architecture.md and document the reply.hijack() pattern
 
+### #16 [SECURITY] Add TTL and max-session-count to MCP session manager (P2)
+
+- [x] Evict stale `Mcp-Session-Id` entries to prevent unbounded memory growth on client disconnect
+
+### #17 [SECURITY] Add rate limiting to HTTP endpoints (P2)
+
+- [x] Rate-limit `/search`, `/admin/reindex`, and MCP session creation
+
 
