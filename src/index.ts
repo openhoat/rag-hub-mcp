@@ -3,6 +3,7 @@ import './preload.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
 import { createStore } from './core/store.js'
 import { getLogger } from './log.js'
@@ -21,6 +22,13 @@ const main = async (): Promise<void> => {
   const DB_PATH = process.env.DB_PATH || (isHttp ? '/data/index/rag.db' : './rag.db')
   const SCAN_INTERVAL = Number.parseInt(process.env.SCAN_INTERVAL || '300', 10)
   const MCP_API_KEY = process.env.MCP_API_KEY || ''
+
+  // Fail fast when HTTP mode is requested without an API key: without it the
+  // REST admin endpoints, /search and /mcp would be exposed with no Bearer auth.
+  if (!requireHttpApiKey(isHttp, MCP_API_KEY)) {
+    logger.error('HTTP mode requires MCP_API_KEY to be set')
+    process.exit(1)
+  }
 
   logger.info(`rag-hub-mcp v${process.env.RAG_VERSION || '0.0.1'} starting (${isHttp ? 'http' : 'stdio'})...`)
 
