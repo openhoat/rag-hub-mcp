@@ -67,7 +67,7 @@ const buildChunk = (lines: Paragraph[], relPath: string, kb: string) => {
   const content = lines.map(p => p.text).join('\n')
   return {
     content,
-    metadata: JSON.stringify({ kb, path: relPath, headings: lines[lines.length - 1]?.headingPath ?? '' }),
+    metadata: JSON.stringify({ kb, path: relPath, headings: lines.at(-1)?.headingPath ?? '' }),
   }
 }
 

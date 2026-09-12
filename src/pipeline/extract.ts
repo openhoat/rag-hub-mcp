@@ -151,7 +151,7 @@ export const parseFrontmatter = (raw: string): ExtractResult => {
   let valid = false
   let malformed = false
   for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^([\w.-]+):\s*(.*)$/.exec(line)
+    const kv = /^([\w.-]+):([^\r\n]*)$/.exec(line)
     if (!kv) {
       if (line.trim()) malformed = true
       continue
