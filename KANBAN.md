@@ -28,4 +28,6 @@
 
 ## In Progress
 
+### #11 [SECURITY] Fail fast when `MCP_API_KEY` is empty in HTTP mode (P1)
 
+- [x] Add startup validation that rejects HTTP mode without a configured API key
