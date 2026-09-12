@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, type Stats, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import fastGlob from 'fast-glob'
-import { chunkText } from './chunk.js'
-import { embedTexts } from './embed.js'
-import { extractText } from './extract.js'
-import { getLogger } from './log.js'
-import type { IngestResult, Store } from './types.js'
+import { getLogger } from '../log.js'
+import { chunkText } from '../pipeline/chunk.js'
+import { embedTexts } from '../pipeline/embed.js'
+import { extractText } from '../pipeline/extract.js'
+import type { IngestResult, Store } from '../types.js'
 
 const logger = getLogger('ingest')
 
@@ -21,7 +21,7 @@ interface KnownFile {
 
 const SCAN_IGNORE = ['.git/**', 'node_modules/**', '__pycache__/**', '.DS_Store', 'Thumbs.db', '.env', '.secrets']
 
-export async function scanAll(store: Store, root: string = KB_ROOT): Promise<IngestResult> {
+export const scanAll = async (store: Store, root: string = KB_ROOT): Promise<IngestResult> => {
   const result: IngestResult = { added: 0, modified: 0, deleted: 0, skipped: 0 }
 
   if (!existsSync(root)) {
@@ -47,13 +47,20 @@ export async function scanAll(store: Store, root: string = KB_ROOT): Promise<Ing
   return result
 }
 
-function listKbDirs(root: string): string[] {
+const listKbDirs = (root: string): string[] => {
   return readdirSync(root, { withFileTypes: true })
     .filter(d => d.isDirectory() && !d.name.startsWith('.'))
     .map(d => d.name)
 }
 
-async function scanKb(store: Store, kbId: number, kbName: string, root: string, knownFiles: Map<string, KnownFile>, result: IngestResult) {
+const scanKb = async (
+  store: Store,
+  kbId: number,
+  kbName: string,
+  root: string,
+  knownFiles: Map<string, KnownFile>,
+  result: IngestResult,
+) => {
   const kbRoot = join(root, kbName)
   const entries = await fastGlob('**/*', { cwd: kbRoot, onlyFiles: true, ignore: SCAN_IGNORE })
 
@@ -94,7 +101,7 @@ async function scanKb(store: Store, kbId: number, kbName: string, root: string, 
   }
 }
 
-function safeStat(fullPath: string): Stats | null {
+const safeStat = (fullPath: string): Stats | null => {
   try {
     return statSync(fullPath)
   } catch {
@@ -102,15 +109,15 @@ function safeStat(fullPath: string): Stats | null {
   }
 }
 
-function isUnchanged(known: KnownFile | undefined, st: Stats): boolean {
+const isUnchanged = (known: KnownFile | undefined, st: Stats): boolean => {
   return known?.mtime === Math.floor(st.mtimeMs) && known?.bytes === st.size
 }
 
-function isSameHash(known: KnownFile | undefined, sha256: string): known is KnownFile {
+const isSameHash = (known: KnownFile | undefined, sha256: string): known is KnownFile => {
   return known?.sha256 === sha256 && Boolean(known?.id)
 }
 
-function purgeStaleFile(store: Store, kbId: number, entry: string) {
+const purgeStaleFile = (store: Store, kbId: number, entry: string) => {
   const existingId = store.getFile(kbId, entry)?.id
   if (existingId) {
     store.deleteChunks(existingId)
@@ -118,7 +125,7 @@ function purgeStaleFile(store: Store, kbId: number, entry: string) {
   }
 }
 
-async function cleanupStale(store: Store, kbDirs: string[], knownFiles: Map<string, KnownFile>, result: IngestResult) {
+const cleanupStale = async (store: Store, kbDirs: string[], knownFiles: Map<string, KnownFile>, result: IngestResult) => {
   for (const rec of knownFiles.values()) {
     if (rec.id) {
       store.deleteChunks(rec.id)
@@ -136,14 +143,14 @@ async function cleanupStale(store: Store, kbDirs: string[], knownFiles: Map<stri
   }
 }
 
-export async function indexFile(
+export const indexFile = async (
   store: Store,
   kbId: number,
   relPath: string,
   fullPath: string,
   sha256: string,
   st: { mtimeMs: number; size: number },
-) {
+) => {
   const text = await extractText(fullPath)
   if (!text) return
 
@@ -175,7 +182,7 @@ export async function indexFile(
   }
 }
 
-export async function addDocument(store: Store, kb: string, relPath: string, content: string, root: string = KB_ROOT) {
+export const addDocument = async (store: Store, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {
   const kbDir = join(root, kb)
   mkdirSync(kbDir, { recursive: true })
   const fullPath = join(kbDir, relPath)
@@ -184,7 +191,7 @@ export async function addDocument(store: Store, kb: string, relPath: string, con
   await scanAll(store, root)
 }
 
-export async function deleteDocument(store: Store, kb: string, relPath: string, root: string = KB_ROOT) {
+export const deleteDocument = async (store: Store, kb: string, relPath: string, root: string = KB_ROOT) => {
   const fullPath = join(root, kb, relPath)
   const normalized = relative(root, fullPath)
   if (normalized.startsWith('..')) throw new Error('invalid path')
@@ -199,7 +206,7 @@ export async function deleteDocument(store: Store, kb: string, relPath: string, 
   }
 }
 
-export async function deleteKb(store: Store, kb: string, root: string = KB_ROOT) {
+export const deleteKb = async (store: Store, kb: string, root: string = KB_ROOT) => {
   const kbDir = join(root, kb)
   if (existsSync(kbDir)) rmSync(kbDir, { recursive: true, force: true })
   const kbId = store.getKbId(kb)
@@ -208,7 +215,7 @@ export async function deleteKb(store: Store, kb: string, root: string = KB_ROOT)
   }
 }
 
-function loadKnownFiles(store: Store): Map<string, KnownFile> {
+const loadKnownFiles = (store: Store): Map<string, KnownFile> => {
   const map = new Map<string, KnownFile>()
   const rows = store.db
     .prepare(`
@@ -222,7 +229,7 @@ function loadKnownFiles(store: Store): Map<string, KnownFile> {
   return map
 }
 
-function hashFile(filePath: string): string {
+const hashFile = (filePath: string): string => {
   const hash = createHash('sha256')
   hash.update(readFileSync(filePath))
   return hash.digest('hex')

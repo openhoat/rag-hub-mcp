@@ -3,11 +3,11 @@ import './preload.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { scanAll } from './ingest.js'
+import { scanAll } from './core/ingest.js'
+import { createStore } from './core/store.js'
 import { getLogger } from './log.js'
-import { createMcpServer, createStreamableHttpTransport } from './mcp.js'
-import { createRestApp } from './rest.js'
-import { createStore } from './store.js'
+import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
+import { createRestApp } from './transport/rest.js'
 import type { Store } from './types.js'
 
 const logger = getLogger('main')
@@ -16,7 +16,7 @@ const logger = getLogger('main')
 // RAG_TRANSPORT=http) to run the HTTP server (REST API + streamable-http MCP).
 const isHttp = process.argv.includes('--http') || process.env.RAG_TRANSPORT === 'http'
 
-async function main(): Promise<void> {
+const main = async (): Promise<void> => {
   const PORT = process.env.PORT || '8000'
   const DB_PATH = process.env.DB_PATH || (isHttp ? '/data/index/rag.db' : './rag.db')
   const SCAN_INTERVAL = Number.parseInt(process.env.SCAN_INTERVAL || '300', 10)
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   // MCP sessions: one McpServer + transport per client session (keyed by Mcp-Session-Id).
   const sessions = new Map<string, { server: McpServer; transport: StreamableHTTPServerTransport }>()
 
-  function closeSession(sessionId: string) {
+  const closeSession = (sessionId: string) => {
     const entry = sessions.get(sessionId)
     if (!entry) return
     sessions.delete(sessionId)
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
   registerShutdown(store)
 }
 
-function registerShutdown(store: Store): void {
+const registerShutdown = (store: Store): void => {
   const shutdown = (signal: string) => {
     logger.info(`${signal} received, shutting down`)
     store.close()

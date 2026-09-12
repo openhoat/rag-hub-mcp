@@ -1,17 +1,17 @@
 import type { Server as HttpServer } from 'node:http'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { addDocument, deleteDocument, deleteKb, scanAll } from './ingest.js'
+import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
+import { search } from '../core/search.js'
+import { makeStubStore, startHttpServer } from '../testing/helpers.js'
 import { createRestApp } from './rest.js'
-import { search } from './search.js'
-import { makeStubStore, startHttpServer } from './test-helpers.js'
 
-vi.mock('./ingest.js', () => ({
+vi.mock('../core/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
   scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
 }))
-vi.mock('./search.js', () => ({
+vi.mock('../core/search.js', () => ({
   search: vi.fn(async () => [{ kb: 'kb', relPath: 'f.md', chunkIndex: 0, content: 'hit', score: 0.5 }]),
 }))
 

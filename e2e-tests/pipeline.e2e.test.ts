@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { deleteDocument, scanAll } from '../src/ingest.js'
-import { search } from '../src/search.js'
-import { createStore } from '../src/store.js'
-import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/test-helpers.js'
+import { deleteDocument, scanAll } from '../src/core/ingest.js'
+import { search } from '../src/core/search.js'
+import { createStore } from '../src/core/store.js'
+import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/testing/helpers.js'
 import type { Store } from '../src/types.js'
 
 describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> search', () => {
@@ -23,7 +23,7 @@ describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> s
     if (root) rmSync(root, { recursive: true, force: true })
   })
 
-  function setup() {
+  const setup = () => {
     root = mkdtempSync(join(tmpdir(), 'rag-pipeline-'))
     const dir = mkdtempSync(join(tmpdir(), 'rag-pipeline-db-'))
     store = createStore(join(dir, 'rag.db'))

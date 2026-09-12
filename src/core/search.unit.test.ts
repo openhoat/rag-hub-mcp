@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { makeChunk, makeStubStore, stubEmbeddingsApi, unitEmbeddings } from '../testing/helpers.js'
+import type { ChunkRecord, Store } from '../types.js'
 import { search } from './search.js'
-import { makeChunk, makeStubStore, stubEmbeddingsApi, unitEmbeddings } from './test-helpers.js'
-import type { ChunkRecord, Store } from './types.js'
 
 // Embeddings are served via a stubbed global fetch (OpenAI-compatible format).
 // embedTexts returns a single query vector, and cosineSimilarity runs for real.
 
-function makeStore(chunks: ChunkRecord[], db: unknown = {}): Store {
+const makeStore = (chunks: ChunkRecord[], db: unknown = {}): Store => {
   return makeStubStore({
     db: db as never,
     getAllChunks(kb?: string): ChunkRecord[] {
@@ -16,7 +16,7 @@ function makeStore(chunks: ChunkRecord[], db: unknown = {}): Store {
   })
 }
 
-function makeFtsDb(rowsByQuery: Record<string, Array<{ id: number; rank: number }>>): unknown {
+const makeFtsDb = (rowsByQuery: Record<string, Array<{ id: number; rank: number }>>): unknown => {
   const prepare = (_sql: string) => ({
     all: (matchQuery: string) => {
       const words = matchQuery.match(/"([^"]+)"/g)?.map(w => w.replaceAll('"', '')) ?? []

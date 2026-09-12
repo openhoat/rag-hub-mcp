@@ -5,7 +5,7 @@ export interface EmbedConfig {
   batchSize?: number
 }
 
-function defaultConfig(): EmbedConfig {
+const defaultConfig = (): EmbedConfig => {
   return {
     baseUrl: process.env.EMBEDDINGS_BASE_URL || 'http://localhost:11434/v1',
     apiKey: process.env.EMBEDDINGS_API_KEY || '',
@@ -13,7 +13,7 @@ function defaultConfig(): EmbedConfig {
   }
 }
 
-export async function embedTexts(texts: string[], config: EmbedConfig = defaultConfig()): Promise<Float32Array[]> {
+export const embedTexts = async (texts: string[], config: EmbedConfig = defaultConfig()): Promise<Float32Array[]> => {
   if (texts.length === 0) return []
   const batchSize = config.batchSize ?? 16
   const result: Float32Array[] = []
@@ -27,7 +27,7 @@ export async function embedTexts(texts: string[], config: EmbedConfig = defaultC
   return result
 }
 
-async function embedBatch(texts: string[], config: EmbedConfig): Promise<number[][]> {
+const embedBatch = async (texts: string[], config: EmbedConfig): Promise<number[][]> => {
   const url = `${config.baseUrl}/embeddings`
   const body = { model: config.model, input: texts }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -54,7 +54,7 @@ async function embedBatch(texts: string[], config: EmbedConfig): Promise<number[
   throw new Error('unrecognized embeddings response format')
 }
 
-export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+export const cosineSimilarity = (a: Float32Array, b: Float32Array): number => {
   let dot = 0
   let na = 0
   let nb = 0

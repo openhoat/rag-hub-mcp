@@ -23,8 +23,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reportsDirectory: 'dist/coverage',
-      include: ['src/*.ts'],
-      exclude: ['src/*.test.ts', 'src/test-helpers.ts', 'src/index.ts', 'src/log.ts'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/testing/helpers.ts', 'src/index.ts', 'src/log.ts'],
       reporter: ['text', 'lcov'],
       thresholds: {
         lines: 80,

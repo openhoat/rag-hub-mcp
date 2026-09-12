@@ -1,9 +1,9 @@
 import cors from 'cors'
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from 'express'
-import { addDocument, deleteDocument, deleteKb, scanAll } from './ingest.js'
-import { getLogger } from './log.js'
-import { search } from './search.js'
-import type { Store } from './types.js'
+import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
+import { search } from '../core/search.js'
+import { getLogger } from '../log.js'
+import type { Store } from '../types.js'
 
 const log = getLogger('rest')
 
@@ -14,7 +14,7 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
   .map(s => s.trim())
   .filter(Boolean)
 
-function auth(req: Request, res: Response): boolean {
+const auth = (req: Request, res: Response): boolean => {
   if (!MCP_API_KEY) return true
   const header = req.headers.authorization
   if (header !== `Bearer ${MCP_API_KEY}`) {
@@ -24,13 +24,13 @@ function auth(req: Request, res: Response): boolean {
   return true
 }
 
-function asyncHandler(handler: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
+const asyncHandler = (handler: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler => {
   return (req, res, next) => {
     handler(req, res, next).catch(next)
   }
 }
 
-export function createRestApp(store: Store) {
+export const createRestApp = (store: Store) => {
   const app = express()
   if (CORS_ORIGINS.length > 0) {
     app.use(

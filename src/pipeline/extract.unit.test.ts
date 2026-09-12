@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { extractText, isTextFile } from './extract.js'
 
-function makeDir(): string {
+const makeDir = (): string => {
   return mkdtempSync(join(tmpdir(), 'rag-extract-'))
 }
 

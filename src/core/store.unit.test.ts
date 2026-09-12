@@ -2,16 +2,16 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import type { Store } from '../types.js'
 import { createStore } from './store.js'
-import type { Store } from './types.js'
 
-function makeStore(): { store: Store; dir: string } {
+const makeStore = (): { store: Store; dir: string } => {
   const dir = mkdtempSync(join(tmpdir(), 'rag-store-'))
   const store = createStore(join(dir, 'rag.db'))
   return { store, dir }
 }
 
-function cleanup(dir: string, store: Store) {
+const cleanup = (dir: string, store: Store) => {
   store.close()
   rmSync(dir, { recursive: true, force: true })
 }

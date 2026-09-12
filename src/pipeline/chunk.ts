@@ -6,7 +6,7 @@ interface Chunk {
 const MAX_CHARS = 3200
 const OVERLAP_CHARS = 400
 
-export function chunkText(text: string, relPath: string, kb: string): Chunk[] {
+export const chunkText = (text: string, relPath: string, kb: string): Chunk[] => {
   const headingPath = extractHeadingPath(text)
   const paragraphs = splitParagraphs(text)
   const chunks: { content: string; metadata: string }[] = []
@@ -39,7 +39,7 @@ export function chunkText(text: string, relPath: string, kb: string): Chunk[] {
   }))
 }
 
-function buildChunk(lines: string[], relPath: string, kb: string, headingPath: string) {
+const buildChunk = (lines: string[], relPath: string, kb: string, headingPath: string) => {
   const content = lines.join('\n')
   return {
     content,
@@ -47,7 +47,7 @@ function buildChunk(lines: string[], relPath: string, kb: string, headingPath: s
   }
 }
 
-function splitParagraphs(text: string): string[] {
+const splitParagraphs = (text: string): string[] => {
   return text
     .split(/\n\n+/)
     .map(s => s.trim())
@@ -56,7 +56,7 @@ function splitParagraphs(text: string): string[] {
 
 const headingRegex = /^(#{1,6})[ \t]+(.+)/
 
-function extractHeadingPath(text: string): string {
+const extractHeadingPath = (text: string): string => {
   const lines = text.split('\n')
   const headings: string[] = []
   for (const line of lines) {
@@ -70,11 +70,11 @@ function extractHeadingPath(text: string): string {
   return headings.filter(Boolean).join(' > ')
 }
 
-function countChars(lines: string[]): number {
+const countChars = (lines: string[]): number => {
   return lines.reduce((s, l) => s + l.length + 1, 0)
 }
 
-function drainOverlap(lines: string[], maxChars: number): string[] {
+const drainOverlap = (lines: string[], maxChars: number): string[] => {
   const result: string[] = []
   let len = 0
   for (let i = lines.length - 1; i >= 0 && len < maxChars; i--) {

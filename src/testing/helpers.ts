@@ -2,15 +2,15 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import type { Server as HttpServer } from 'node:http'
 import { dirname, join } from 'node:path'
 import type { Express } from 'express'
-import type { ChunkRecord, KbInfo, Store } from './types.js'
+import type { ChunkRecord, KbInfo, Store } from '../types.js'
 
-export function writeKbDocument(root: string, kb: string, relPath: string, content: string): void {
+export const writeKbDocument = (root: string, kb: string, relPath: string, content: string): void => {
   const full = join(root, kb, relPath)
   mkdirSync(dirname(full), { recursive: true })
   writeFileSync(full, content, 'utf-8')
 }
 
-export function makeChunk(id: number, kb: string, content: string, embedding?: number[]): ChunkRecord {
+export const makeChunk = (id: number, kb: string, content: string, embedding?: number[]): ChunkRecord => {
   return {
     id,
     fileId: id,
@@ -21,7 +21,7 @@ export function makeChunk(id: number, kb: string, content: string, embedding?: n
   }
 }
 
-export function makeStubStore(overrides: Partial<Store> = {}): Store {
+export const makeStubStore = (overrides: Partial<Store> = {}): Store => {
   const defaultKbs: KbInfo[] = [{ name: 'kb', docCount: 1, chunkCount: 2, totalBytes: 42 }]
   return {
     db: {} as never,
@@ -43,7 +43,7 @@ export function makeStubStore(overrides: Partial<Store> = {}): Store {
   }
 }
 
-export async function startHttpServer(app: Express): Promise<{ server: HttpServer; base: string }> {
+export const startHttpServer = async (app: Express): Promise<{ server: HttpServer; base: string }> => {
   const server = await new Promise<HttpServer>(resolve => {
     const s = app.listen(0, () => resolve(s))
   })
@@ -55,7 +55,7 @@ export async function startHttpServer(app: Express): Promise<{ server: HttpServe
 /**
  * Resolve the string form of a fetch input without a nested ternary (Sonar S3358).
  */
-function resolveUrl(input: RequestInfo | URL): string {
+const resolveUrl = (input: RequestInfo | URL): string => {
   if (typeof input === 'string') return input
   if (input instanceof URL) return input.href
   return input.url
@@ -64,7 +64,7 @@ function resolveUrl(input: RequestInfo | URL): string {
 /**
  * Normalize an OpenAI/Ollama `input` payload to a flat string array.
  */
-function normalizeInput(payload: { input?: string | string[] }): string[] {
+const normalizeInput = (payload: { input?: string | string[] }): string[] => {
   if (Array.isArray(payload.input)) return payload.input
   if (typeof payload.input === 'string') return [payload.input]
   return []
@@ -78,7 +78,7 @@ function normalizeInput(payload: { input?: string | string[] }): string[] {
  * `makeEmbeddings` receives the array of input texts and must return one
  * embedding per text (dimension chosen by the caller). Returns a restore fn.
  */
-export function stubEmbeddingsApi(makeEmbeddings: (inputTexts: string[]) => number[][]): () => void {
+export const stubEmbeddingsApi = (makeEmbeddings: (inputTexts: string[]) => number[][]): (() => void) => {
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = resolveUrl(input)
@@ -100,6 +100,6 @@ export function stubEmbeddingsApi(makeEmbeddings: (inputTexts: string[]) => numb
 }
 
 /** Deterministic unit vectors that give cosine similarity ~1 between any pair. */
-export function unitEmbeddings(dimension = 4): number[] {
+export const unitEmbeddings = (dimension = 4): number[] => {
   return Array.from({ length: dimension }, (_, i) => (i === 0 ? 1 : 0))
 }

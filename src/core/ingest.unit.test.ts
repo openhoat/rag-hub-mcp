@@ -2,14 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import type { Store } from '../types.js'
 import { createStore } from './store.js'
-import type { Store } from './types.js'
 
-vi.mock('./embed.js', () => ({
+vi.mock('../pipeline/embed.js', () => ({
   embedTexts: vi.fn(async () => [new Float32Array([0.5, 0.5])]),
   cosineSimilarity: vi.fn(() => 0),
 }))
-vi.mock('./extract.js', () => ({
+vi.mock('../pipeline/extract.js', () => ({
   extractText: vi.fn(async () => 'extracted content'),
   isTextFile: vi.fn(() => true),
   TEXT_EXTENSIONS: new Set(['.md']),
@@ -20,7 +20,7 @@ import { addDocument, deleteDocument, deleteKb, scanAll } from './ingest.js'
 let root: string
 let store: Store
 
-function setupKb(): { root: string; store: Store } {
+const setupKb = (): { root: string; store: Store } => {
   const dir = mkdtempSync(join(tmpdir(), 'rag-ingest-'))
   const dbDir = mkdtempSync(join(tmpdir(), 'rag-ingest-db-'))
   const s = createStore(join(dbDir, 'rag.db'))

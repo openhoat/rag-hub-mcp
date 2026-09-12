@@ -4,7 +4,7 @@ const ARGV_SAVE = process.argv
 
 // preload.ts sets KB_ROOT / DB_PATH defaults at import time depending on the
 // transport mode, so each case must re-import it with a controlled env.
-async function importPreload() {
+const importPreload = async () => {
   vi.resetModules()
   await import('./preload.js')
   return { kbRoot: process.env.KB_ROOT, dbPath: process.env.DB_PATH }

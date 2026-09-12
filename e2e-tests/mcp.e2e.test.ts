@@ -7,10 +7,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { Express } from 'express'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createMcpServer, createStreamableHttpTransport } from '../src/mcp.js'
-import { createRestApp } from '../src/rest.js'
-import { createStore } from '../src/store.js'
-import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/test-helpers.js'
+import { createMcpServer, createStreamableHttpTransport } from '../src/transport/mcp.js'
+import { createRestApp } from '../src/transport/rest.js'
+import { createStore } from '../src/core/store.js'
+import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/testing/helpers.js'
 import type { Store } from '../src/types.js'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }
@@ -21,11 +21,11 @@ interface SessionEntry {
   transport: StreamableHTTPServerTransport
 }
 
-async function postSse(
+const postSse = async (
   base: string,
   body: unknown,
   sessionId?: string,
-): Promise<{ res: Response; messages: Array<Record<string, unknown>> }> {
+): Promise<{ res: Response; messages: Array<Record<string, unknown>> }> => {
   const headers: Record<string, string> = { ...AUTH, 'Content-Type': 'application/json', Accept: ACCEPT }
   if (sessionId) headers['Mcp-Session-Id'] = sessionId
   const res = await fetch(`${base}/mcp`, { method: 'POST', headers, body: JSON.stringify(body) })
@@ -39,7 +39,7 @@ async function postSse(
   return { res, messages }
 }
 
-async function initialize(base: string): Promise<string> {
+const initialize = async (base: string): Promise<string> => {
   const { res, messages } = await postSse(base, {
     jsonrpc: '2.0',
     id: 1,
@@ -70,7 +70,7 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     app = createRestApp(store)
     sessions = new Map<string, SessionEntry>()
 
-    function closeSession(id: string) {
+    const closeSession = (id: string) => {
       const entry = sessions.get(id)
       if (!entry) return
       sessions.delete(id)

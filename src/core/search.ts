@@ -1,6 +1,6 @@
-import { cosineSimilarity, embedTexts } from './embed.js'
-import { getLogger } from './log.js'
-import type { ChunkRecord, SearchResult, Store } from './types.js'
+import { getLogger } from '../log.js'
+import { cosineSimilarity, embedTexts } from '../pipeline/embed.js'
+import type { ChunkRecord, SearchResult, Store } from '../types.js'
 
 export interface SearchParams {
   query: string
@@ -8,7 +8,7 @@ export interface SearchParams {
   topK?: number
 }
 
-export async function search(store: Store, params: SearchParams): Promise<SearchResult[]> {
+export const search = async (store: Store, params: SearchParams): Promise<SearchResult[]> => {
   const { query, kb, topK = 10 } = params
 
   const queryEmb = await embedQueries(query)
@@ -39,7 +39,7 @@ export async function search(store: Store, params: SearchParams): Promise<Search
   })
 }
 
-async function embedQueries(query: string): Promise<Float32Array | undefined> {
+const embedQueries = async (query: string): Promise<Float32Array | undefined> => {
   try {
     const [first] = await embedTexts([query])
     return first
@@ -50,20 +50,20 @@ async function embedQueries(query: string): Promise<Float32Array | undefined> {
   }
 }
 
-function scoreChunk(
+const scoreChunk = (
   chunk: ChunkRecord,
   query: string,
   queryEmb: Float32Array | undefined,
   useFts: boolean,
   ftsScores: Map<number, number> | null,
-): number {
+): number => {
   const weights = { vector: 0.65, keyword: 0.35 }
   let score = scoreVector(queryEmb, chunk, weights.vector)
   score += scoreKeyword(chunk, query, ftsScores, useFts, weights.keyword)
   return score
 }
 
-function scoreVector(queryEmb: Float32Array | undefined, chunk: ChunkRecord, weight: number): number {
+const scoreVector = (queryEmb: Float32Array | undefined, chunk: ChunkRecord, weight: number): number => {
   if (!queryEmb || !chunk.embedding || chunk.embedding.length < 4) return 0
   const vec = new Float32Array(chunk.embedding.buffer, chunk.embedding.byteOffset, chunk.embedding.byteLength / 4)
   if (vec.length !== queryEmb.length) return 0
@@ -71,7 +71,7 @@ function scoreVector(queryEmb: Float32Array | undefined, chunk: ChunkRecord, wei
   return sim > 0.08 ? sim * weight : 0
 }
 
-function buildFtsScores(store: Store, query: string): Map<number, number> | null {
+const buildFtsScores = (store: Store, query: string): Map<number, number> | null => {
   const scores = new Map<number, number>()
   const words = query.split(/\s+/).filter(w => w.length > 2)
   if (words.length === 0) return null
@@ -91,11 +91,17 @@ function buildFtsScores(store: Store, query: string): Map<number, number> | null
   return scores
 }
 
-function clamp(value: number, min: number, max: number): number {
+const clamp = (value: number, min: number, max: number): number => {
   return Math.min(max, Math.max(min, value))
 }
 
-function scoreKeyword(chunk: ChunkRecord, query: string, ftsScores: Map<number, number> | null, useFts: boolean, weight: number): number {
+const scoreKeyword = (
+  chunk: ChunkRecord,
+  query: string,
+  ftsScores: Map<number, number> | null,
+  useFts: boolean,
+  weight: number,
+): number => {
   if (useFts) {
     const ftsScore = ftsScores?.get(chunk.id ?? -1)
     if (ftsScore !== undefined && ftsScore > 0) return ftsScore * weight

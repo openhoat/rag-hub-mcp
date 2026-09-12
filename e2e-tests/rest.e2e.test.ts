@@ -3,9 +3,9 @@ import type { Server as HttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createRestApp } from '../src/rest.js'
-import { createStore } from '../src/store.js'
-import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/test-helpers.js'
+import { createRestApp } from '../src/transport/rest.js'
+import { createStore } from '../src/core/store.js'
+import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/testing/helpers.js'
 import type { Store } from '../src/types.js'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }

@@ -1,15 +1,15 @@
 import { describe, expect, test, vi } from 'vitest'
+import { makeStubStore } from '../testing/helpers.js'
+import type { Store } from '../types.js'
 import { handleToolCall } from './mcp.js'
-import { makeStubStore } from './test-helpers.js'
-import type { Store } from './types.js'
 
-vi.mock('./search.js', () => ({
+vi.mock('../core/search.js', () => ({
   search: vi.fn(async () => [{ kb: 'kb', relPath: 'file.md', chunkIndex: 0, content: 'result snippet', score: 0.9 }]),
 }))
 
-import { addDocument, deleteDocument, deleteKb } from './ingest.js'
+import { addDocument, deleteDocument, deleteKb } from '../core/ingest.js'
 
-vi.mock('./ingest.js', () => ({
+vi.mock('../core/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
@@ -20,7 +20,7 @@ const mockedAdd = vi.mocked(addDocument)
 const mockedDelete = vi.mocked(deleteDocument)
 const mockedDeleteKb = vi.mocked(deleteKb)
 
-function store(listKbs = true, listFiles = true): Store {
+const store = (listKbs = true, listFiles = true): Store => {
   return makeStubStore({
     listKbs: () => (listKbs ? [{ name: 'kb', docCount: 1, chunkCount: 2, totalBytes: 42 }] : []),
     listFiles: () => (listFiles ? [{ relPath: 'a.md', sha256: 'x', mtime: 1, bytes: 42, chunkCount: 2 }] : []),

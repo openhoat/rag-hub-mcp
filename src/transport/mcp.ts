@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
-import { addDocument, deleteDocument, deleteKb, scanAll } from './ingest.js'
-import { search } from './search.js'
-import type { Store } from './types.js'
+import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
+import { search } from '../core/search.js'
+import type { Store } from '../types.js'
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
 
@@ -26,7 +26,7 @@ const deleteDocArgs = {
   path: z.string().describe('Document relative path'),
 }
 
-export function createMcpServer(store: Store): McpServer {
+export const createMcpServer = (store: Store): McpServer => {
   const server = new McpServer({ name: 'rag-hub-mcp', version: RAG_VERSION }, { capabilities: { tools: {} } })
 
   server.registerTool('rag_list_kbs', { description: 'List available knowledge bases with stats' }, async () =>
@@ -90,7 +90,7 @@ export interface StreamableHttpTransportOptions {
   onSessionClosed?: (sessionId: string) => void
 }
 
-export function createStreamableHttpTransport(options?: StreamableHttpTransportOptions) {
+export const createStreamableHttpTransport = (options?: StreamableHttpTransportOptions) => {
   // Stateful mode: each client session gets a Mcp-Session-Id (randomUUID).
   // A dedicated transport is created per session so multiple clients can each
   // initialize without hitting "Server already initialized".
@@ -101,7 +101,7 @@ export function createStreamableHttpTransport(options?: StreamableHttpTransportO
   })
 }
 
-export async function handleToolCall(store: Store, name: string, args: Record<string, unknown>): Promise<ToolResult> {
+export const handleToolCall = async (store: Store, name: string, args: Record<string, unknown>): Promise<ToolResult> => {
   switch (name) {
     case 'rag_list_kbs': {
       const kbs = store.listKbs()
@@ -110,15 +110,15 @@ export async function handleToolCall(store: Store, name: string, args: Record<st
     }
 
     case 'rag_list_documents': {
-      const docs = store.listFiles(args.kb as string)
+      const { kb } = z.object(kbArgs).parse(args)
+      const docs = store.listFiles(kb)
       const lines = docs.map(d => `- **${d.relPath}** (${d.chunkCount} chunks, ${fmt(d.bytes)})`)
       return { content: [{ type: 'text', text: lines.join('\n') || 'No documents.' }] }
     }
 
     case 'rag_search': {
-      const query = args.query as string
-      const kb = args.kb as string | undefined
-      const topK = (args.top_k as number) || 10
+      const { query, kb, top_k } = z.object(searchArgs).parse(args)
+      const topK = top_k ?? 10
       const results = await search(store, { query, kb, topK })
       if (results.length === 0) {
         return { content: [{ type: 'text', text: 'No results found.' }] }
@@ -132,23 +132,20 @@ ${r.content}`,
     }
 
     case 'rag_add_document': {
-      const kb = args.kb as string
-      const path = args.path as string
-      const content = args.content as string
+      const { kb, path, content } = z.object(addDocArgs).parse(args)
       const safePath = path.replaceAll('../', '').replace(/^\/+/, '')
       await addDocument(store, kb, safePath, content)
       return { content: [{ type: 'text', text: `Document added: **${kb}/${safePath}** — indexed and searchable.` }] }
     }
 
     case 'rag_delete_document': {
-      const kb = args.kb as string
-      const path = args.path as string
+      const { kb, path } = z.object(deleteDocArgs).parse(args)
       await deleteDocument(store, kb, path)
       return { content: [{ type: 'text', text: `Document deleted: **${kb}/${path}**` }] }
     }
 
     case 'rag_delete_kb': {
-      const kb = args.kb as string
+      const { kb } = z.object(kbArgs).parse(args)
       await deleteKb(store, kb)
       return { content: [{ type: 'text', text: `Knowledge base deleted: **${kb}**` }] }
     }
@@ -177,7 +174,7 @@ ${r.content}`,
   }
 }
 
-function fmt(bytes: number): string {
+const fmt = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`

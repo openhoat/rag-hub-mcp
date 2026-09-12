@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
 
-export async function extractText(filePath: string): Promise<string> {
+export const extractText = async (filePath: string): Promise<string> => {
   const ext = extname(filePath).toLowerCase()
   switch (ext) {
     case '.md':
@@ -62,11 +62,11 @@ export const TEXT_EXTENSIONS = new Set([
   '.csv',
 ])
 
-export function isTextFile(filePath: string): boolean {
+export const isTextFile = (filePath: string): boolean => {
   return TEXT_EXTENSIONS.has(extname(filePath).toLowerCase())
 }
 
-async function extractPdf(filePath: string): Promise<string> {
+const extractPdf = async (filePath: string): Promise<string> => {
   try {
     const parse = (await import('pdf-parse')).default || (await import('pdf-parse'))
     const buf = readFileSync(filePath)
@@ -77,7 +77,7 @@ async function extractPdf(filePath: string): Promise<string> {
   }
 }
 
-async function extractDocx(filePath: string): Promise<string> {
+const extractDocx = async (filePath: string): Promise<string> => {
   try {
     const mammoth = await import('mammoth')
     const buf = readFileSync(filePath)
@@ -88,7 +88,7 @@ async function extractDocx(filePath: string): Promise<string> {
   }
 }
 
-async function extractXlsx(filePath: string): Promise<string> {
+const extractXlsx = async (filePath: string): Promise<string> => {
   try {
     const XLSX = await import('xlsx')
     const wb = XLSX.readFile(filePath)
@@ -106,7 +106,7 @@ async function extractXlsx(filePath: string): Promise<string> {
   }
 }
 
-async function extractPptx(filePath: string): Promise<string> {
+const extractPptx = async (filePath: string): Promise<string> => {
   try {
     const JSZip = (await import('jszip')).default
     const buf = readFileSync(filePath)
