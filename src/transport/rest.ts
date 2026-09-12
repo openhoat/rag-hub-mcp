@@ -1,5 +1,5 @@
-import cors from 'cors'
-import express, { type NextFunction, type Request, type RequestHandler, type Response } from 'express'
+import cors from '@fastify/cors'
+import fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import { getLogger } from '../log.js'
@@ -14,122 +14,95 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
   .map(s => s.trim())
   .filter(Boolean)
 
-const auth = (req: Request, res: Response): boolean => {
+const auth = (req: FastifyRequest, reply: FastifyReply): boolean => {
   if (!MCP_API_KEY) return true
   const header = req.headers.authorization
   if (header !== `Bearer ${MCP_API_KEY}`) {
-    res.status(401).json({ error: 'unauthorized' })
+    reply.code(401).send({ error: 'unauthorized' })
     return false
   }
   return true
 }
 
-const asyncHandler = (handler: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler => {
-  return (req, res, next) => {
-    handler(req, res, next).catch(next)
-  }
-}
+type AddBody = { path?: string; content?: unknown }
 
 export const createRestApp = (store: Store) => {
-  const app = express()
+  const app = fastify({ bodyLimit: 10 * 1024 * 1024 })
+
   if (CORS_ORIGINS.length > 0) {
-    app.use(
-      cors({
-        origin: CORS_ORIGINS,
-      }),
-    )
+    app.register(cors, { origin: CORS_ORIGINS })
   }
-  app.use(express.json({ limit: '10mb' }))
 
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', version: RAG_VERSION })
+  app.get('/health', (_req, reply) => {
+    reply.send({ status: 'ok', version: RAG_VERSION })
   })
 
-  app.get('/admin/kbs', (req: Request, res: Response) => {
-    if (!auth(req, res)) return
-    res.json(store.listKbs())
+  app.get('/admin/kbs', (req, reply) => {
+    if (!auth(req, reply)) return
+    reply.send(store.listKbs())
   })
 
-  app.get('/admin/kbs/:kb/documents', (req: Request, res: Response) => {
-    if (!auth(req, res)) return
-    const docs = store.listFiles(req.params.kb)
-    res.json(docs)
+  app.get<{ Params: { kb: string } }>('/admin/kbs/:kb/documents', (req, reply) => {
+    if (!auth(req, reply)) return
+    reply.send(store.listFiles(req.params.kb))
   })
 
-  app.post(
-    '/admin/kbs/:kb/documents',
-    asyncHandler(async (req: Request, res: Response) => {
-      if (!auth(req, res)) return
-      const { kb } = req.params
-      const { path: relPath, content } = req.body
-      if (!relPath || content === undefined) {
-        res.status(400).json({ error: 'path and content required' })
-        return
-      }
-      const safePath = relPath.replaceAll('../', '').replace(/^\/+/, '')
-      await addDocument(store, kb, safePath, content)
-      res.json({ status: 'added', kb, path: safePath })
-    }),
-  )
-
-  app.delete(
-    '/admin/kbs/:kb/documents/:path(*)',
-    asyncHandler(async (req: Request, res: Response) => {
-      if (!auth(req, res)) return
-      const relPath = decodeURIComponent(req.params.path)
-      await deleteDocument(store, req.params.kb, relPath)
-      res.json({ status: 'deleted', kb: req.params.kb, path: relPath })
-    }),
-  )
-
-  app.delete(
-    '/admin/kbs/:kb',
-    asyncHandler(async (req: Request, res: Response) => {
-      if (!auth(req, res)) return
-      await deleteKb(store, req.params.kb)
-      res.json({ status: 'deleted_kb', kb: req.params.kb })
-    }),
-  )
-
-  app.post(
-    '/admin/reindex',
-    asyncHandler(async (req: Request, res: Response) => {
-      if (!auth(req, res)) return
-      const result = await scanAll(store)
-      res.json(result)
-    }),
-  )
-
-  app.get('/admin/status', (req: Request, res: Response) => {
-    if (!auth(req, res)) return
-    res.json({ kbs: store.listKbs() })
-  })
-
-  app.get(
-    '/search',
-    asyncHandler(async (req: Request, res: Response) => {
-      if (!auth(req, res)) return
-      const { query, kb, top_k } = req.query
-      if (!query) {
-        res.status(400).json({ error: 'query required' })
-        return
-      }
-      const results = await search(store, {
-        query: query as string,
-        kb: kb as string | undefined,
-        topK: top_k ? Number.parseInt(top_k as string, 10) : 10,
-      })
-      res.json({ results })
-    }),
-  )
-
-  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    if (res.headersSent) {
-      next(err)
+  app.post<{ Params: { kb: string }; Body: AddBody }>('/admin/kbs/:kb/documents', async (req, reply) => {
+    if (!auth(req, reply)) return
+    const { kb } = req.params
+    const { path: relPath, content } = req.body
+    if (!relPath || content === undefined) {
+      reply.code(400).send({ error: 'path and content required' })
       return
     }
+    const safePath = relPath.replaceAll('../', '').replace(/^\/+/, '')
+    await addDocument(store, kb, safePath, content as string)
+    reply.send({ status: 'added', kb, path: safePath })
+  })
+
+  app.delete<{ Params: { kb: string; '*': string } }>('/admin/kbs/:kb/documents/*', async (req, reply) => {
+    if (!auth(req, reply)) return
+    const relPath = decodeURIComponent(req.params['*'])
+    await deleteDocument(store, req.params.kb, relPath)
+    reply.send({ status: 'deleted', kb: req.params.kb, path: relPath })
+  })
+
+  app.delete<{ Params: { kb: string } }>('/admin/kbs/:kb', async (req, reply) => {
+    if (!auth(req, reply)) return
+    await deleteKb(store, req.params.kb)
+    reply.send({ status: 'deleted_kb', kb: req.params.kb })
+  })
+
+  app.post('/admin/reindex', async (_req, reply) => {
+    if (!auth(_req, reply)) return
+    const result = await scanAll(store)
+    reply.send(result)
+  })
+
+  app.get('/admin/status', (req, reply) => {
+    if (!auth(req, reply)) return
+    reply.send({ kbs: store.listKbs() })
+  })
+
+  app.get<{ Querystring: { query?: string; kb?: string; top_k?: string } }>('/search', async (req, reply) => {
+    if (!auth(req, reply)) return
+    const { query, kb, top_k } = req.query
+    if (!query) {
+      reply.code(400).send({ error: 'query required' })
+      return
+    }
+    const results = await search(store, {
+      query,
+      kb,
+      topK: top_k ? Number.parseInt(top_k, 10) : 10,
+    })
+    reply.send({ results })
+  })
+
+  app.setErrorHandler((err, _req, reply) => {
+    if (reply.sent) return
     log.error('request failed', err)
-    res.status(500).json({ error: 'internal error' })
+    reply.code(500).send({ error: 'internal error' })
   })
 
   return app

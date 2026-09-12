@@ -59,7 +59,7 @@ const main = async (): Promise<void> => {
     logger.info(`periodic scan every ${SCAN_INTERVAL}s`)
   }
 
-  // Express app
+  // Fastify app (REST + streamable-http MCP on the same instance).
   const app = createRestApp(store)
 
   // MCP sessions: one McpServer + transport per client session (keyed by Mcp-Session-Id).
@@ -73,24 +73,28 @@ const main = async (): Promise<void> => {
     logger.info(`MCP session closed: ${sessionId}`)
   }
 
-  app.post('/mcp', async (req, res) => {
+  app.post('/mcp', async (request, reply) => {
     if (MCP_API_KEY) {
-      const auth = req.headers.authorization
+      const auth = request.headers.authorization
       if (auth !== `Bearer ${MCP_API_KEY}`) {
-        res.status(401).json({ error: 'unauthorized' })
+        reply.code(401).send({ error: 'unauthorized' })
         return
       }
     }
-    const sessionId = req.headers['mcp-session-id'] as string | undefined
+    const sessionId = request.headers['mcp-session-id'] as string | undefined
     try {
+      // The SDK writes directly to the Node.js raw response (SSE + JSON-RPC).
+      // Take over the reply lifecycle before handing off the raw objects.
+      reply.hijack()
       if (sessionId) {
         // Existing session: route to its dedicated transport.
         const entry = sessions.get(sessionId)
-        if (!entry) {
-          res.status(404).json({ error: 'unknown session' })
+        if (entry) {
+          await entry.transport.handleRequest(request.raw, reply.raw, request.body)
           return
         }
-        await entry.transport.handleRequest(req, res, req.body)
+        reply.raw.statusCode = 404
+        reply.raw.end(JSON.stringify({ error: 'unknown session' }))
         return
       }
 
@@ -105,18 +109,19 @@ const main = async (): Promise<void> => {
         onSessionClosed: closeSession,
       })
       await server.connect(transport)
-      await transport.handleRequest(req, res, req.body)
+      await transport.handleRequest(request.raw, reply.raw, request.body)
     } catch (err) {
       logger.error('MCP streamable-http error', err instanceof Error ? err.stack : String(err))
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'mcp error' })
+      if (!reply.raw.writableEnded) {
+        reply.raw.statusCode = 500
+        reply.raw.end(JSON.stringify({ error: 'mcp error' }))
       }
     }
   })
 
   // List tools endpoint (for MCP inspector)
-  app.get('/mcp', (_req, res) => {
-    res.json({
+  app.get('/mcp', (_request, reply) => {
+    reply.send({
       name: 'rag-hub-mcp',
       version: process.env.RAG_VERSION || '0.0.1',
       tools: [
@@ -133,11 +138,10 @@ const main = async (): Promise<void> => {
   })
 
   // Start server
-  app.listen(PORT, () => {
-    logger.info(`server listening on port ${PORT}`)
-    logger.info(`REST: http://localhost:${PORT}/health`)
-    logger.info(`MCP (streamable-http): http://localhost:${PORT}/mcp`)
-  })
+  await app.listen({ port: Number(PORT) })
+  logger.info(`server listening on port ${PORT}`)
+  logger.info(`REST: http://localhost:${PORT}/health`)
+  logger.info(`MCP (streamable-http): http://localhost:${PORT}/mcp`)
 
   registerShutdown(store)
 }

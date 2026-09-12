@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import type { Express } from 'express'
+import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMcpServer, createStreamableHttpTransport } from '../src/transport/mcp.js'
 import { createRestApp } from '../src/transport/rest.js'
@@ -57,7 +57,7 @@ const initialize = async (base: string): Promise<string> => {
 describe('MCP streamable-http endpoint (per-session transports)', () => {
   let root: string
   let store: Store
-  let app: Express
+  let app: FastifyInstance
   let server: HttpServer
   let base: string
   let sessions: Map<string, SessionEntry>
@@ -77,24 +77,26 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
       entry.transport.close().catch(() => {})
     }
 
-    app.post('/mcp', async (req, res) => {
+    app.post('/mcp', async (request, reply) => {
       const apiKey = 'test-secret-key'
       if (apiKey) {
-        const auth = req.headers.authorization
+        const auth = request.headers.authorization
         if (auth !== `Bearer ${apiKey}`) {
-          res.status(401).json({ error: 'unauthorized' })
+          reply.code(401).send({ error: 'unauthorized' })
           return
         }
       }
-      const sessionId = req.headers['mcp-session-id'] as string | undefined
+      const sessionId = request.headers['mcp-session-id'] as string | undefined
+      reply.hijack()
       try {
         if (sessionId) {
           const entry = sessions.get(sessionId)
-          if (!entry) {
-            res.status(404).json({ error: 'unknown session' })
+          if (entry) {
+            await entry.transport.handleRequest(request.raw, reply.raw, request.body)
             return
           }
-          await entry.transport.handleRequest(req, res, req.body)
+          reply.raw.statusCode = 404
+          reply.raw.end(JSON.stringify({ error: 'unknown session' }))
           return
         }
         const transport = createStreamableHttpTransport({
@@ -105,15 +107,18 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
         })
         const server = createMcpServer(store)
         await server.connect(transport)
-        await transport.handleRequest(req, res, req.body)
+        await transport.handleRequest(request.raw, reply.raw, request.body)
       } catch {
-        if (!res.headersSent) res.status(500).json({ error: 'mcp error' })
+        if (!reply.raw.writableEnded) {
+          reply.raw.statusCode = 500
+          reply.raw.end(JSON.stringify({ error: 'mcp error' }))
+        }
       }
     })
 
-    server = await new Promise<HttpServer>(resolve => {
-      const s = app.listen(0, () => resolve(s))
-    })
+    await app.ready()
+    await app.listen({ port: 0 })
+    server = app.server
     const addr = server.address() as AddressInfo
     base = `http://127.0.0.1:${addr.port}`
   })

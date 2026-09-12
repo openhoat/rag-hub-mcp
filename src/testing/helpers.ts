@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import type { Server as HttpServer } from 'node:http'
 import { dirname, join } from 'node:path'
-import type { Express } from 'express'
+import type { FastifyInstance } from 'fastify'
 import type { ChunkRecord, KbInfo, Store } from '../types.js'
 
 export const writeKbDocument = (root: string, kb: string, relPath: string, content: string): void => {
@@ -43,13 +43,13 @@ export const makeStubStore = (overrides: Partial<Store> = {}): Store => {
   }
 }
 
-export const startHttpServer = async (app: Express): Promise<{ server: HttpServer; base: string }> => {
-  const server = await new Promise<HttpServer>(resolve => {
-    const s = app.listen(0, () => resolve(s))
-  })
-  const addr = server.address()
-  if (addr === null || typeof addr === 'string') throw new Error('no port assigned')
-  return { server, base: `http://127.0.0.1:${addr.port}` }
+export const startHttpServer = async (app: FastifyInstance): Promise<{ server: HttpServer; base: string }> => {
+  await app.ready()
+  await app.listen({ port: 0 })
+  const server = app.server
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('no port assigned')
+  return { server, base: `http://127.0.0.1:${address.port}` }
 }
 
 /**
