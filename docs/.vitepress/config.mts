@@ -3,7 +3,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 
 export default withMermaid(
   defineConfig({
-    title: 'rag-hub-mcp',
+    title: 'Rag Hub MCP',
     description: 'Self-hosted RAG that speaks MCP',
     base: '/rag-hub-mcp/',
 

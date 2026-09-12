@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: rag-hub-mcp
+  name: Rag Hub MCP
   text: Self-hosted RAG that speaks MCP
   tagline: Drop folders on disk, get a searchable knowledge base served to any MCP-compatible agent or over REST. Zero infrastructure.
   image:
