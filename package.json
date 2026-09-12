@@ -98,9 +98,7 @@
     },
     "sonar": {
       "command": "sonar-scanner-npm",
-      "dependencies": ["coverage"],
-      "files": ["sonar-project.properties", "src/**/*.ts"],
-      "output": ["dist/.scannerwork/**"]
+      "dependencies": ["coverage"]
     },
     "test": {
       "command": "vitest run",
