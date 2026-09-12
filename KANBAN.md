@@ -10,10 +10,6 @@
 
 - [x] Implementation
 
-### #3 [FEAT] Content extraction improvement: markdown section metadata, metadata YAML frontmatter
-
-- [x] Implementation
-
 ### #4 [FEAT] Open WebUI default tool model binding, per-user access via custom headers
 
 - [ ] Implementation
@@ -35,17 +31,5 @@
 - [x] Replace `content as string` with Zod validation in `src/transport/rest.ts`
 
 ## In Progress
-
-### #12 [DOCS] Update `architecture.md` Express references to Fastify
-
-- [x] Replace "Express" with "Fastify" in docs/guide/architecture.md and document the reply.hijack() pattern
-
-### #16 [SECURITY] Add TTL and max-session-count to MCP session manager (P2)
-
-- [x] Evict stale `Mcp-Session-Id` entries to prevent unbounded memory growth on client disconnect
-
-### #17 [SECURITY] Add rate limiting to HTTP endpoints (P2)
-
-- [x] Rate-limit `/search`, `/admin/reindex`, and MCP session creation
 
 
