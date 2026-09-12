@@ -24,26 +24,13 @@ Most RAG setups need a vector database, a chunking pipeline, an embeddings servi
 
 ## How it works
 
-```
-          ┌──────────────────────────────┐
-          │           ./kbs/             │  folders = knowledge bases
-          │   infra/    dev/    docs/     │
-          └──────────────┬───────────────┘
-                         │ scan (SHA-256 diff)
-                         ▼
-          ┌──────────────────────────────┐
-          │   extract → chunk → embed    │  bge-m3 / any OpenAI-compatible API
-          └──────────────┬───────────────┘
-                         ▼
-          ┌──────────────────────────────┐
-          │   SQLite + FTS5               │  vectors + full-text index
-          └──────────────┬───────────────┘
-                         │ hybrid score (cosine 0.65 + FTS5 0.35)
-                         ▼
-              ┌──────────┴──────────┐
-              ▼                     ▼
-        MCP tools              REST API
-        (stdio / http)          /search
+```mermaid
+graph TD
+    KBS["./kbs/ — folders = knowledge bases"] -->|scan SHA-256 diff| PROC["extract → chunk → embed<br/>bge-m3 / any OpenAI-compatible API"]
+    PROC --> DB[("SQLite + FTS5<br/>vectors + full-text index")]
+    DB --> SRCH["hybrid score<br/>cosine 0.65 + FTS5 0.35"]
+    SRCH --> MCP["MCP tools<br/>stdio / http"]
+    SRCH --> REST["REST API<br/>/search"]
 ```
 
 ## Install

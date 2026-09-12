@@ -5,10 +5,13 @@
 dist/
 node_modules/
 
-# VitePress docs build
+# VitePress build output & cache
+.vitepress/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 
+# Worktree sync marker
+.worktree-sync
 
 .env
 .env.local

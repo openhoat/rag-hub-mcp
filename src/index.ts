@@ -96,6 +96,7 @@ async function main(): Promise<void> {
 
       // New session: create a dedicated transport + server, then handle the request.
       // onsessioninitialized fires during handleRequest once the SDK allocates the id.
+      const server = createMcpServer(store)
       const transport = createStreamableHttpTransport({
         onSessionInitialized: id => {
           sessions.set(id, { server, transport })
@@ -103,7 +104,6 @@ async function main(): Promise<void> {
         },
         onSessionClosed: closeSession,
       })
-      const server = createMcpServer(store)
       await server.connect(transport)
       await transport.handleRequest(req, res, req.body)
     } catch (err) {

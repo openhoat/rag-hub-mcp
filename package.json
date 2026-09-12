@@ -43,11 +43,11 @@
     "typecheck": "tsc --noEmit",
     "validate": "npm run qa && npm run build"
   },
+  "main": "dist/index.js",
   "volta": {
     "node": "24.21.0",
     "npm": "11.19.1"
   },
-  "main": "dist/index.js",
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "better-sqlite3": "11.10.0",

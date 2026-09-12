@@ -204,7 +204,6 @@ export async function deleteKb(store: Store, kb: string, root: string = KB_ROOT)
   if (existsSync(kbDir)) rmSync(kbDir, { recursive: true, force: true })
   const kbId = store.getKbId(kb)
   if (kbId) {
-    store.deleteFilesByKb(kbId)
     store.removeKb(kb)
   }
 }

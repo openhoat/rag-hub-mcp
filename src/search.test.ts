@@ -42,7 +42,8 @@ function makeStore(chunks: ChunkRecord[]): Store {
     removeKb: () => {},
     insertChunk: () => 0,
     deleteChunks: () => {},
-    getAllChunks(): ChunkRecord[] {
+    getAllChunks(kb?: string): ChunkRecord[] {
+      if (kb) return chunks.filter(c => (JSON.parse(c.metadata) as { kb: string }).kb === kb)
       return chunks
     },
     purgeKb: () => {},

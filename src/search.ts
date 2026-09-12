@@ -13,15 +13,12 @@ export async function search(store: Store, params: SearchParams): Promise<Search
 
   const queryEmb = await embedQueries(query)
   const allChunks = kb ? store.getAllChunks(kb) : store.getAllChunks()
+  const ftsScores = buildFtsScores(store, query)
+  const useFts = ftsScores !== null
   const scored: { id: number; content: string; metadata: string; score: number }[] = []
 
   for (const chunk of allChunks) {
-    if (kb) {
-      const meta: { kb: string } = JSON.parse(chunk.metadata)
-      if (meta.kb !== kb) continue
-    }
-
-    const score = scoreChunk(chunk, query, queryEmb)
+    const score = scoreChunk(chunk, query, queryEmb, useFts, ftsScores)
     if (score > 0 && chunk.id) {
       scored.push({ id: chunk.id, content: chunk.content, metadata: chunk.metadata, score })
     }
@@ -53,10 +50,16 @@ async function embedQueries(query: string): Promise<Float32Array | undefined> {
   }
 }
 
-function scoreChunk(chunk: ChunkRecord, query: string, queryEmb: Float32Array | undefined): number {
+function scoreChunk(
+  chunk: ChunkRecord,
+  query: string,
+  queryEmb: Float32Array | undefined,
+  useFts: boolean,
+  ftsScores: Map<number, number> | null,
+): number {
   const weights = { vector: 0.65, keyword: 0.35 }
   let score = scoreVector(queryEmb, chunk, weights.vector)
-  score += scoreKeyword(query, chunk.content, weights.keyword)
+  score += scoreKeyword(chunk, query, ftsScores, useFts, weights.keyword)
   return score
 }
 
@@ -68,18 +71,46 @@ function scoreVector(queryEmb: Float32Array | undefined, chunk: ChunkRecord, wei
   return sim > 0.08 ? sim * weight : 0
 }
 
-function scoreKeyword(query: string, content: string, weight: number): number {
+function buildFtsScores(store: Store, query: string): Map<number, number> | null {
+  const scores = new Map<number, number>()
+  const words = query.split(/\s+/).filter(w => w.length > 2)
+  if (words.length === 0) return null
+  if (!store.db?.prepare) return null
+  const matchQuery = words.map(w => `"${w}"`).join(' AND ')
+  try {
+    const rows = (store.db.prepare('SELECT rowid AS id, rank FROM fts_chunks WHERE fts_chunks MATCH ?').all(matchQuery) ?? []) as {
+      id: number
+      rank: number
+    }[]
+    for (const row of rows) {
+      scores.set(row.id, clamp(1 / (1 + Math.abs(row.rank)), 0, 1))
+    }
+  } catch {
+    return null
+  }
+  return scores
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function scoreKeyword(chunk: ChunkRecord, query: string, ftsScores: Map<number, number> | null, useFts: boolean, weight: number): number {
+  if (useFts) {
+    const ftsScore = ftsScores?.get(chunk.id ?? -1)
+    if (ftsScore !== undefined && ftsScore > 0) return ftsScore * weight
+    return 0
+  }
   const words = query.split(/\s+/).filter(w => w.length > 2)
   if (words.length === 0) return 0
-
-  const contentLower = content.toLowerCase()
+  const contentLower = chunk.content.toLowerCase()
   let hits = 0
   let rank = 0
   for (const word of words) {
     const idx = contentLower.indexOf(word.toLowerCase())
     if (idx !== -1) {
       hits++
-      rank += 1 / (1 + idx / content.length)
+      rank += 1 / (1 + idx / chunk.content.length)
     }
   }
   return hits > 0 ? (hits / words.length) * rank * weight : 0

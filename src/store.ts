@@ -135,6 +135,12 @@ function removeKb(this: Store, name: string) {
 }
 
 function purgeKb(this: Store, kbId: number) {
+  const chunkIds = this.db.prepare('SELECT id FROM chunks WHERE file_id IN (SELECT id FROM files WHERE kb_id = ?)').all(kbId) as {
+    id: number
+  }[]
+  for (const row of chunkIds) {
+    this.db.prepare('DELETE FROM fts_chunks WHERE rowid = ?').run(row.id)
+  }
   this.db.prepare('DELETE FROM chunks WHERE file_id IN (SELECT id FROM files WHERE kb_id = ?)').run(kbId)
   this.db.prepare('DELETE FROM files WHERE kb_id = ?').run(kbId)
 }
@@ -149,7 +155,7 @@ function insertChunk(this: Store, rec: Omit<ChunkRecord, 'id'>): number {
     .prepare('INSERT INTO chunks (file_id, chunk_index, content, metadata, embedding) VALUES (?, ?, ?, ?, ?)')
     .run(rec.fileId, rec.chunkIndex, rec.content, rec.metadata, rec.embedding ?? null)
   const chunkId = r.lastInsertRowid as number
-  this.db.prepare('INSERT INTO fts_chunks (content, metadata) VALUES (?, ?)').run(rec.content, rec.metadata)
+  this.db.prepare('INSERT INTO fts_chunks (rowid, content, metadata) VALUES (?, ?, ?)').run(chunkId, rec.content, rec.metadata)
   return chunkId
 }
 
