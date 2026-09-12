@@ -40,6 +40,7 @@
     "sonar": "wireit",
     "start": "node dist/index.js",
     "start:docs": "vitepress dev docs",
+    "start:inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
     "test": "wireit",
     "test:e2e": "wireit",
     "test:unit": "wireit",

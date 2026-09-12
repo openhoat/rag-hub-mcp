@@ -90,7 +90,32 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 
 ## MCP tools & REST API
 
-8 tools over MCP (`rag_list_kbs`, `rag_search`, `rag_add_document`, …) and a small `/search` + `/admin/*` REST API. See the [MCP tools](https://openhoat.github.io/rag-hub-mcp/guide/mcp-tools) and [REST API](https://openhoat.github.io/rag-hub-mcp/guide/rest-api) docs for the full detail.
+**8 tools over MCP**, callable from any MCP-compatible agent:
+
+| Tool | Description |
+|---|---|
+| `rag_list_kbs` | List KBs with stats |
+| `rag_list_documents` | List documents in a KB |
+| `rag_search` | Hybrid search (`kb` optional) |
+| `rag_add_document` | Add a text document |
+| `rag_delete_document` | Delete a document |
+| `rag_delete_kb` | Delete an entire KB |
+| `rag_reindex` | Trigger an immediate scan |
+| `rag_status` | Index overview (KBs, documents, chunks) |
+
+**Small REST API** (`--http` mode), all endpoints except `/health` require `MCP_API_KEY`:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/health` | GET | Health check |
+| `/admin/kbs` | GET | List KBs |
+| `/admin/kbs/:kb/documents` | GET / POST / DELETE | List / add / delete documents |
+| `/admin/kbs/:kb` | DELETE | Delete a KB |
+| `/admin/reindex` | POST | Force reindex |
+| `/admin/status` | GET | Index status |
+| `/search?query=…&kb=…&top_k=10` | GET | Hybrid search |
+
+See the [MCP tools](https://openhoat.github.io/rag-hub-mcp/guide/mcp-tools) and [REST API](https://openhoat.github.io/rag-hub-mcp/guide/rest-api) docs for the full detail.
 
 ## Configuration
 
@@ -112,11 +137,14 @@ The full docs live at **[openhoat.github.io/rag-hub-mcp](https://openhoat.github
 
 ```bash
 npm install
-npm run validate    # lint + typecheck + test + build
-npm start           # start the server
+npm run build           # compile to dist/
+npm run validate        # lint + typecheck + test + build
+npm start               # start the server (stdio)
+npm start -- --http     # start in HTTP mode (REST + streamable-http MCP)
+npm run start:inspector # open the MCP Inspector web UI (launches dist/)
 ```
 
-Uses **Biome** for linting/formatting and **vitest** for unit tests. Contributions are welcome.
+Uses **Biome** for linting/formatting and **vitest** for unit + e2e tests. The source is split into layered modules (`core/`, `pipeline/`, `transport/`, `testing/`) — see the [architecture](https://openhoat.github.io/rag-hub-mcp/guide/architecture) doc for the full picture. Contributions are welcome.
 
 ## License
 
