@@ -16,7 +16,7 @@ graph TD
 
     subgraph TRANSPORT["transport — protocoles"]
         MCP["mcp.ts<br/>8 tools, zod, streamable-http"]
-        REST["rest.ts<br/>Express /health /admin /search"]
+        REST["rest.ts<br/>Fastify /health /admin /search"]
     end
 
     subgraph CORE["core — logique métier"]
@@ -126,7 +126,7 @@ graph LR
 
 En HTTP, chaque client MCP reçoit **sa propre paire** `McpServer` + `StreamableHTTPServerTransport`, identifiée par un `Mcp-Session-Id` (UUID). Un POST `/mcp` sans session crée un transport dédié ; les appels suivants réutilisent ce transport via l'en-tête de session. Ceci évite l'erreur *« Server already initialized »* sur les clients concurrents. `GET /mcp` expose la liste des 8 tools (utile pour l'inspecteur MCP).
 
-Le SDK MCP reçoit les objets Node natifs `IncomingMessage`/`ServerResponse` d'Express : `transport.handleRequest(req, res, req.body)`.
+Le SDK MCP reçoit les objets Node natifs `IncomingMessage`/`ServerResponse` de Fastify : `transport.handleRequest(request.raw, reply.raw, request.body)`. En Fastify, on utilise `reply.hijack()` pour reprendre la main sur la réponse brute avant de passer `reply.raw` au SDK : `reply.hijack()` transfère le cycle de vie de la réponse à l'appelant, et le SDK écrit directement (SSE + JSON-RPC) sur la réponse Node brute.
 
 ## Résolution de configuration
 

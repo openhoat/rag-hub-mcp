@@ -28,6 +28,8 @@
 
 ## In Progress
 
-### #11 [SECURITY] Fail fast when `MCP_API_KEY` is empty in HTTP mode (P1)
+### #12 [DOCS] Update `architecture.md` Express references to Fastify
 
-- [x] Add startup validation that rejects HTTP mode without a configured API key
+- [x] Replace "Express" with "Fastify" in docs/guide/architecture.md and document the reply.hijack() pattern
+
+
