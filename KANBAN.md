@@ -2,14 +2,6 @@
 
 ## Backlog
 
-### #1 [FEAT] MCP tool `rag_read` — retrieve full document content by path
-
-- [x] Implementation
-
-### #2 [FEAT] Search with KB filter accepts comma-separated list (`kb="infra,dev"`)
-
-- [x] Implementation
-
 ### #4 [FEAT] Open WebUI default tool model binding, per-user access via custom headers
 
 - [ ] Implementation
@@ -21,14 +13,6 @@
 ### #8 [FEAT] Open Notebook embedding provider pointing to `EMBEDDINGS_BASE_URL`
 
 - [ ] Implementation
-
-### #9 [SECURITY] Enforce `relative()` containment check in `addDocument` (P1)
-
-- [x] Replace `replaceAll('../', '')` sanitization with `relative()` check in `src/core/ingest.ts` (same as `deleteDocument`)
-
-### #10 [SECURITY] Validate `content` is a string in REST add-document (P1)
-
-- [x] Replace `content as string` with Zod validation in `src/transport/rest.ts`
 
 ## In Progress
 
