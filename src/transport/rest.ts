@@ -1,4 +1,5 @@
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
 import fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
@@ -32,12 +33,26 @@ const addBodySchema = z.object({
 
 type AddBody = z.infer<typeof addBodySchema>
 
-export const createRestApp = (store: Store) => {
+export const createRestApp = async (store: Store) => {
   const app = fastify({ bodyLimit: 10 * 1024 * 1024 })
 
   if (CORS_ORIGINS.length > 0) {
-    app.register(cors, { origin: CORS_ORIGINS })
+    await app.register(cors, { origin: CORS_ORIGINS })
   }
+
+  // Per-route rate limiting. Limits are configurable via env so operators can
+  // tune them, and so tests can set a tiny limit to trigger a 429 quickly.
+  const SEARCH_LIMIT = Number.parseInt(process.env.SEARCH_RATE_PER_MINUTE || '60', 10)
+  const REINDEX_LIMIT = Number.parseInt(process.env.REINDEX_RATE_PER_MINUTE || '60', 10)
+
+  // `global: false` so no route is limited implicitly; sensitive routes opt in
+  // via `{ config: { rateLimit } }` (search, reindex). `register` MUST be
+  // awaited so the plugin's `onRoute` hook attaches before routes are declared
+  // — otherwise no rate limit is applied. Health/list endpoints stay unlimited.
+  await app.register(rateLimit, { global: false, max: SEARCH_LIMIT, timeWindow: 60_000 })
+
+  const searchLimiter = { config: { rateLimit: { max: SEARCH_LIMIT, timeWindow: 60_000 } } }
+  const reindexLimiter = { config: { rateLimit: { max: REINDEX_LIMIT, timeWindow: 60_000 } } }
 
   app.get('/health', (_req, reply) => {
     reply.send({ status: 'ok', version: RAG_VERSION })
@@ -87,7 +102,7 @@ export const createRestApp = (store: Store) => {
     reply.send({ status: 'deleted_kb', kb: req.params.kb })
   })
 
-  app.post('/admin/reindex', async (_req, reply) => {
+  app.post('/admin/reindex', reindexLimiter, async (_req, reply) => {
     if (!auth(_req, reply)) return
     const result = await scanAll(store)
     reply.send(result)
@@ -98,7 +113,7 @@ export const createRestApp = (store: Store) => {
     reply.send({ kbs: store.listKbs() })
   })
 
-  app.get<{ Querystring: { query?: string; kb?: string; top_k?: string } }>('/search', async (req, reply) => {
+  app.get<{ Querystring: { query?: string; kb?: string; top_k?: string } }>('/search', searchLimiter, async (req, reply) => {
     if (!auth(req, reply)) return
     const { query, kb, top_k } = req.query
     if (!query) {
@@ -116,6 +131,14 @@ export const createRestApp = (store: Store) => {
   app.setErrorHandler((err, _req, reply) => {
     if (reply.sent) return
     log.error('request failed', err)
+    // Honor the 429 raised by @fastify/rate-limit instead of collapsing it
+    // into a generic 500. All other errors keep the generic 500 handling.
+    const statusCode =
+      typeof err === 'object' && err !== null && 'statusCode' in err ? (err as { statusCode?: number }).statusCode : undefined
+    if (statusCode === 429) {
+      reply.code(429).send({ error: 'rate limit exceeded' })
+      return
+    }
     reply.code(500).send({ error: 'internal error' })
   })
 

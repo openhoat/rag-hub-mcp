@@ -67,7 +67,7 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     restoreFetch = stubEmbeddingsApi(texts => texts.map(() => unitEmbeddings(4)))
     root = mkdtempSync(join(tmpdir(), 'rag-mcp-'))
     store = createStore(join(root, 'rag.db'))
-    app = createRestApp(store)
+    app = await createRestApp(store)
     sessions = new Map<string, SessionEntry>()
 
     const closeSession = (id: string) => {

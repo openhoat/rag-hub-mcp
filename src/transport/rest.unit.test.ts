@@ -29,7 +29,7 @@ describe('rest', () => {
   let base: string
 
   beforeEach(async () => {
-    const started = await startHttpServer(createRestApp(makeStubStore()))
+    const started = await startHttpServer(await createRestApp(makeStubStore()))
     server = started.server
     base = started.base
   })
@@ -192,5 +192,24 @@ describe('rest', () => {
     const res = await fetch(`${base}/admin/kbs/docs/documents/${encoded}`, { method: 'DELETE', headers: AUTH })
     expect(res.status).toBe(200)
     expect(mockedDelete).toHaveBeenCalledWith(expect.anything(), 'docs', 'notes/my file.md')
+  })
+
+  test('should return 429 on /search when the rate limit is exceeded', async () => {
+    process.env.SEARCH_RATE_PER_MINUTE = '1'
+    try {
+      const started = await startHttpServer(await createRestApp(makeStubStore()))
+      const limitedServer = started.server
+      const limitedBase = started.base
+      try {
+        let res = await fetch(`${limitedBase}/search?query=hello`, { headers: AUTH })
+        expect(res.status).toBe(200)
+        res = await fetch(`${limitedBase}/search?query=again`, { headers: AUTH })
+        expect(res.status).toBe(429)
+      } finally {
+        limitedServer.close()
+      }
+    } finally {
+      delete process.env.SEARCH_RATE_PER_MINUTE
+    }
   })
 })
