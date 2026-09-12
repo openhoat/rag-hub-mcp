@@ -1,0 +1,105 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import type { Server as HttpServer } from 'node:http'
+import { dirname, join } from 'node:path'
+import type { Express } from 'express'
+import type { ChunkRecord, KbInfo, Store } from './types.js'
+
+export function writeKbDocument(root: string, kb: string, relPath: string, content: string): void {
+  const full = join(root, kb, relPath)
+  mkdirSync(dirname(full), { recursive: true })
+  writeFileSync(full, content, 'utf-8')
+}
+
+export function makeChunk(id: number, kb: string, content: string, embedding?: number[]): ChunkRecord {
+  return {
+    id,
+    fileId: id,
+    chunkIndex: 0,
+    content,
+    metadata: JSON.stringify({ kb, path: `${kb}/file.md`, headings: '' }),
+    embedding: embedding ? Buffer.from(new Float32Array(embedding).buffer) : null,
+  }
+}
+
+export function makeStubStore(overrides: Partial<Store> = {}): Store {
+  const defaultKbs: KbInfo[] = [{ name: 'kb', docCount: 1, chunkCount: 2, totalBytes: 42 }]
+  return {
+    db: {} as never,
+    close: () => {},
+    listKbs: () => defaultKbs,
+    listFiles: () => [{ relPath: 'a.md', sha256: 'x', mtime: 1, bytes: 42, chunkCount: 2 }],
+    getFile: () => null,
+    upsertFile: () => 0,
+    deleteFile: () => {},
+    deleteFilesByKb: () => {},
+    getKbId: () => 0,
+    addKb: () => {},
+    removeKb: () => {},
+    insertChunk: () => 0,
+    deleteChunks: () => {},
+    getAllChunks: () => [],
+    purgeKb: () => {},
+    ...overrides,
+  }
+}
+
+export async function startHttpServer(app: Express): Promise<{ server: HttpServer; base: string }> {
+  const server = await new Promise<HttpServer>(resolve => {
+    const s = app.listen(0, () => resolve(s))
+  })
+  const addr = server.address()
+  if (addr === null || typeof addr === 'string') throw new Error('no port assigned')
+  return { server, base: `http://127.0.0.1:${addr.port}` }
+}
+
+/**
+ * Resolve the string form of a fetch input without a nested ternary (Sonar S3358).
+ */
+function resolveUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
+/**
+ * Normalize an OpenAI/Ollama `input` payload to a flat string array.
+ */
+function normalizeInput(payload: { input?: string | string[] }): string[] {
+  if (Array.isArray(payload.input)) return payload.input
+  if (typeof payload.input === 'string') return [payload.input]
+  return []
+}
+
+/**
+ * Stub the global fetch so that ONLY requests to an OpenAI/Ollama-compatible
+ * `/embeddings` endpoint are intercepted. All other requests (including the
+ * test's own calls to a local HTTP server) pass through to the real fetch.
+ *
+ * `makeEmbeddings` receives the array of input texts and must return one
+ * embedding per text (dimension chosen by the caller). Returns a restore fn.
+ */
+export function stubEmbeddingsApi(makeEmbeddings: (inputTexts: string[]) => number[][]): () => void {
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = resolveUrl(input)
+    if (url.endsWith('/embeddings')) {
+      const rawBody = init?.body
+      const payload = typeof rawBody === 'string' ? (JSON.parse(rawBody) as { input?: string | string[] }) : { input: [] }
+      const texts = normalizeInput(payload)
+      const embeddings = makeEmbeddings(texts)
+      return new Response(JSON.stringify({ data: embeddings.map(e => ({ embedding: e })) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return prev(input, init)
+  }) as typeof fetch
+  return () => {
+    globalThis.fetch = prev
+  }
+}
+
+/** Deterministic unit vectors that give cosine similarity ~1 between any pair. */
+export function unitEmbeddings(dimension = 4): number[] {
+  return Array.from({ length: dimension }, (_, i) => (i === 0 ? 1 : 0))
+}

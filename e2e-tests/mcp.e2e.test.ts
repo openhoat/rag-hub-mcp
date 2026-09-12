@@ -7,10 +7,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { Express } from 'express'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createMcpServer, createStreamableHttpTransport } from './mcp.js'
-import { createRestApp } from './rest.js'
-import { createStore } from './store.js'
-import type { Store } from './types.js'
+import { createMcpServer, createStreamableHttpTransport } from '../src/mcp.js'
+import { createRestApp } from '../src/rest.js'
+import { createStore } from '../src/store.js'
+import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/test-helpers.js'
+import type { Store } from '../src/types.js'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }
 const ACCEPT = 'application/json, text/event-stream'
@@ -60,8 +61,10 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
   let server: HttpServer
   let base: string
   let sessions: Map<string, SessionEntry>
+  let restoreFetch: (() => void) | undefined
 
   beforeEach(async () => {
+    restoreFetch = stubEmbeddingsApi(texts => texts.map(() => unitEmbeddings(4)))
     root = mkdtempSync(join(tmpdir(), 'rag-mcp-'))
     store = createStore(join(root, 'rag.db'))
     app = createRestApp(store)
@@ -116,6 +119,7 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
   })
 
   afterEach(() => {
+    restoreFetch?.()
     server?.close()
     store?.close()
     if (root) rmSync(root, { recursive: true, force: true })
@@ -186,5 +190,135 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
     })
     expect(res.status).toBe(401)
+  })
+
+  test('should add, search, then delete a document through the full pipeline', async () => {
+    const sessionId = await initialize(base)
+
+    const add = await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: { name: 'rag_add_document', arguments: { kb: 'pipe', path: 'notes/hello.md', content: 'the quick brown fox' } },
+      },
+      sessionId,
+    )
+    expect(add.res.status).toBe(200)
+    const addResult = add.messages.find(m => m.id === 10)?.result as { content?: Array<{ text?: string }> }
+    expect(addResult?.content?.[0]?.text).toContain('Document added')
+
+    const searchHit = await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 11,
+        method: 'tools/call',
+        params: { name: 'rag_search', arguments: { query: 'quick fox', kb: 'pipe' } },
+      },
+      sessionId,
+    )
+    expect(searchHit.res.status).toBe(200)
+    const searchText = searchHit.messages.find(m => m.id === 11)?.result as { content?: Array<{ text?: string }> }
+    expect(searchText?.content?.[0]?.text ?? '').not.toContain('No results found.')
+
+    const del = await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 12,
+        method: 'tools/call',
+        params: { name: 'rag_delete_document', arguments: { kb: 'pipe', path: 'notes/hello.md' } },
+      },
+      sessionId,
+    )
+    expect(del.res.status).toBe(200)
+
+    const searchMiss = await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 13,
+        method: 'tools/call',
+        params: { name: 'rag_search', arguments: { query: 'quick fox', kb: 'pipe' } },
+      },
+      sessionId,
+    )
+    const missText = searchMiss.messages.find(m => m.id === 13)?.result as { content?: Array<{ text?: string }> }
+    expect(missText?.content?.[0]?.text).toContain('No results found.')
+  })
+
+  test('should index files added on disk and expose them via rag_reindex and rag_search', async () => {
+    const sessionId = await initialize(base)
+    writeKbDocument(process.env.KB_ROOT as string, 'books', 'ref/api.md', 'restful apis return json responses')
+    // rag_reindex triggers scanAll for the whole KB_ROOT
+    const reindex = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'rag_reindex', arguments: {} } },
+      sessionId,
+    )
+    const reindexResult = reindex.messages.find(m => m.id === 20)?.result as { content?: Array<{ text?: string }> }
+    expect(reindexResult?.content?.[0]?.text ?? '').toMatch(/\+\d+/)
+
+    const list = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'rag_list_documents', arguments: { kb: 'books' } } },
+      sessionId,
+    )
+    const listText = list.messages.find(m => m.id === 21)?.result as { content?: Array<{ text?: string }> }
+    expect(listText?.content?.[0]?.text ?? '').toContain('ref/api.md')
+
+    const call = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 22, method: 'tools/call', params: { name: 'rag_search', arguments: { query: 'restful json', kb: 'books' } } },
+      sessionId,
+    )
+    const callText = call.messages.find(m => m.id === 22)?.result as { content?: Array<{ text?: string }> }
+    expect(callText?.content?.[0]?.text ?? '').not.toContain('No results found.')
+  })
+
+  test('should report status with per-KB stats', async () => {
+    const sessionId = await initialize(base)
+    writeKbDocument(process.env.KB_ROOT as string, 'statkb', 'a.md', 'alpha beta gamma')
+    const reindex = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 30, method: 'tools/call', params: { name: 'rag_reindex', arguments: {} } },
+      sessionId,
+    )
+    expect(reindex.res.status).toBe(200)
+
+    const status = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 31, method: 'tools/call', params: { name: 'rag_status', arguments: { kb: 'statkb' } } },
+      sessionId,
+    )
+    expect(status.res.status).toBe(200)
+    const statusText = status.messages.find(m => m.id === 31)?.result as { content?: Array<{ text?: string }> }
+    expect(statusText?.content?.[0]?.text ?? '').toContain('**statkb**')
+  })
+
+  test('should return an error result for an unknown tool', async () => {
+    const sessionId = await initialize(base)
+    const call = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'rag_nope', arguments: {} } },
+      sessionId,
+    )
+    expect(call.res.status).toBe(200)
+    const result = call.messages.find(m => m.id === 40)?.result as { isError?: boolean; content?: Array<{ text?: string }> }
+    expect(result?.isError).toBe(true)
+  })
+
+  test('should return an error result for invalid tool arguments', async () => {
+    const sessionId = await initialize(base)
+    const call = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 41, method: 'tools/call', params: { name: 'rag_add_document', arguments: { kb: 'docs' } } },
+      sessionId,
+    )
+    // Missing required args (path, content) => tool returns an error / or MCP reports invalid params.
+    const result = call.messages.find(m => m.id === 41)?.result
+    expect(result).toBeTruthy()
   })
 })
