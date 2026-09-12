@@ -269,6 +269,45 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     expect(missText?.content?.[0]?.text).toContain('No results found.')
   })
 
+  test('should return frontmatter in rag_read for a markdown document', async () => {
+    const sessionId = await initialize(base)
+    await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 15,
+        method: 'tools/call',
+        params: {
+          name: 'rag_add_document',
+          arguments: {
+            kb: 'pipe',
+            path: 'notes/intro.md',
+            content: '---\ntitle: Intro\nauthor: Olivier\n---\n\n# Body\n\ncore content paragraph',
+          },
+        },
+      },
+      sessionId,
+    )
+
+    const read = await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 16,
+        method: 'tools/call',
+        params: { name: 'rag_read', arguments: { kb: 'pipe', path: 'notes/intro.md' } },
+      },
+      sessionId,
+    )
+    expect(read.res.status).toBe(200)
+    const readText = read.messages.find(m => m.id === 16)?.result as { content?: Array<{ text?: string }> }
+    const text = readText?.content?.[0]?.text ?? ''
+    expect(text).toContain('**Frontmatter:**')
+    expect(text).toContain('- **title**: Intro')
+    expect(text).toContain('- **author**: Olivier')
+    expect(text).toContain('core content paragraph')
+  })
+
   test('should index files added on disk and expose them via rag_reindex and rag_search', async () => {
     const sessionId = await initialize(base)
     writeKbDocument(process.env.KB_ROOT as string, 'books', 'ref/api.md', 'restful apis return json responses')

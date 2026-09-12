@@ -1,10 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
+import type { ExtractResult } from '../types.js'
 
-export const extractText = async (filePath: string): Promise<string> => {
+export const extractText = async (filePath: string): Promise<ExtractResult> => {
   const ext = extname(filePath).toLowerCase()
+
   switch (ext) {
     case '.md':
+      return parseFrontmatter(readFileSync(filePath, 'utf-8'))
+
     case '.txt':
     case '.html':
     case '.htm':
@@ -22,7 +26,7 @@ export const extractText = async (filePath: string): Promise<string> => {
     case '.xml':
     case '.env':
     case '.csv':
-      return readFileSync(filePath, 'utf-8')
+      return { text: readFileSync(filePath, 'utf-8'), frontmatter: null }
 
     case '.pdf':
       return await extractPdf(filePath)
@@ -37,7 +41,7 @@ export const extractText = async (filePath: string): Promise<string> => {
       return await extractPptx(filePath)
 
     default:
-      return ''
+      return { text: '', frontmatter: null }
   }
 }
 
@@ -66,29 +70,29 @@ export const isTextFile = (filePath: string): boolean => {
   return TEXT_EXTENSIONS.has(extname(filePath).toLowerCase())
 }
 
-const extractPdf = async (filePath: string): Promise<string> => {
+const extractPdf = async (filePath: string): Promise<ExtractResult> => {
   try {
     const parse = (await import('pdf-parse')).default || (await import('pdf-parse'))
     const buf = readFileSync(filePath)
     const data = await parse(buf)
-    return data.text || ''
+    return { text: data.text || '', frontmatter: null }
   } catch {
-    return ''
+    return { text: '', frontmatter: null }
   }
 }
 
-const extractDocx = async (filePath: string): Promise<string> => {
+const extractDocx = async (filePath: string): Promise<ExtractResult> => {
   try {
     const mammoth = await import('mammoth')
     const buf = readFileSync(filePath)
     const result = await mammoth.extractRawText({ buffer: buf })
-    return result.value || ''
+    return { text: result.value || '', frontmatter: null }
   } catch {
-    return ''
+    return { text: '', frontmatter: null }
   }
 }
 
-const extractXlsx = async (filePath: string): Promise<string> => {
+const extractXlsx = async (filePath: string): Promise<ExtractResult> => {
   try {
     const XLSX = await import('xlsx')
     const wb = XLSX.readFile(filePath)
@@ -100,13 +104,13 @@ const extractXlsx = async (filePath: string): Promise<string> => {
         lines.push(`--- ${name} ---\n${csv}`)
       }
     }
-    return lines.join('\n')
+    return { text: lines.join('\n'), frontmatter: null }
   } catch {
-    return ''
+    return { text: '', frontmatter: null }
   }
 }
 
-const extractPptx = async (filePath: string): Promise<string> => {
+const extractPptx = async (filePath: string): Promise<ExtractResult> => {
   try {
     const JSZip = (await import('jszip')).default
     const buf = readFileSync(filePath)
@@ -127,8 +131,35 @@ const extractPptx = async (filePath: string): Promise<string> => {
         .join(' ')
       if (slideText) texts.push(slideText)
     }
-    return texts.join('\n\n')
+    return { text: texts.join('\n\n'), frontmatter: null }
   } catch {
-    return ''
+    return { text: '', frontmatter: null }
   }
+}
+
+/**
+ * Parse an optional YAML frontmatter block from the start of a markdown file.
+ * Recognizes `key: value` pairs, quoted strings, and inline arrays `[a, b]`.
+ * Returns the remaining text (frontmatter stripped) plus the parsed fields,
+ * or the original text unchanged when no well-formed frontmatter is present.
+ */
+export const parseFrontmatter = (raw: string): ExtractResult => {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(raw)
+  if (!m) return { text: raw, frontmatter: null }
+
+  const frontmatter: Record<string, string> = {}
+  let valid = false
+  let malformed = false
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([\w.-]+):\s*(.*)$/.exec(line)
+    if (!kv) {
+      if (line.trim()) malformed = true
+      continue
+    }
+    valid = true
+    frontmatter[kv[1]] = kv[2].trim().replace(/^['"]|['"]$/g, '')
+  }
+
+  if (!valid || malformed) return { text: raw, frontmatter: null }
+  return { text: raw.slice(m[0].length).replace(/^\r?\n+/, ''), frontmatter }
 }

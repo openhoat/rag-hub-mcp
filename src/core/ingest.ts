@@ -152,7 +152,7 @@ export const indexFile = async (
   sha256: string,
   st: { mtimeMs: number; size: number },
 ) => {
-  const text = await extractText(fullPath)
+  const { text, frontmatter } = await extractText(fullPath)
   if (!text) return
 
   const fileId = store.upsertFile({
@@ -164,7 +164,7 @@ export const indexFile = async (
   })
 
   const kbName = (store.db.prepare('SELECT name FROM kbs WHERE id = ?').get(kbId) as { name: string } | undefined)?.name || '?'
-  const chunks = chunkText(text, relPath, kbName)
+  const chunks = chunkText(text, relPath, kbName, frontmatter)
   if (chunks.length === 0) return
 
   const texts = chunks.map(c => c.content)
@@ -216,11 +216,16 @@ export const deleteKb = async (store: Store, kb: string, root: string = KB_ROOT)
   }
 }
 
-export const readDocument = async (kb: string, relPath: string, root: string = KB_ROOT): Promise<string | null> => {
+export const readDocument = async (
+  kb: string,
+  relPath: string,
+  root: string = KB_ROOT,
+): Promise<{ content: string; frontmatter: Record<string, string> | null } | null> => {
   const fullPath = sanitizeRelativePath(root, kb, relPath)
   if (!existsSync(fullPath)) return null
-  const text = await extractText(fullPath)
-  return text || null
+  const { text, frontmatter } = await extractText(fullPath)
+  if (!text) return null
+  return { content: text, frontmatter }
 }
 
 const loadKnownFiles = (store: Store): Map<string, KnownFile> => {

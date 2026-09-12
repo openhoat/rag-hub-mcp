@@ -65,3 +65,8 @@ export interface IngestResult {
   deleted: number
   skipped: number
 }
+
+export interface ExtractResult {
+  text: string
+  frontmatter: Record<string, string> | null
+}

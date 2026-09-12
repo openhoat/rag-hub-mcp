@@ -10,7 +10,7 @@ vi.mock('../pipeline/embed.js', () => ({
   cosineSimilarity: vi.fn(() => 0),
 }))
 vi.mock('../pipeline/extract.js', () => ({
-  extractText: vi.fn(async () => 'extracted content'),
+  extractText: vi.fn(async () => ({ text: 'extracted content', frontmatter: null })),
   isTextFile: vi.fn(() => true),
   TEXT_EXTENSIONS: new Set(['.md']),
 }))
@@ -126,8 +126,8 @@ describe('readDocument', () => {
     root = setup.root
     store = setup.store
     writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
-    const content = await readDocument('docs', 'a.md', root)
-    expect(content).toBe('extracted content')
+    const doc = await readDocument('docs', 'a.md', root)
+    expect(doc).toEqual({ content: 'extracted content', frontmatter: null })
   })
 
   test('should return null for a missing file', async () => {

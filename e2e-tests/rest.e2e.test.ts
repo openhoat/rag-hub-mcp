@@ -139,8 +139,26 @@ describe('REST API (real store + ingest + search)', () => {
     const encoded = encodeURIComponent('readme.md')
     const res = await fetch(`${base}/document?kb=docs&path=${encoded}`, { headers: AUTH })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { content: string }
+    const body = (await res.json()) as { content: string; frontmatter: Record<string, string> | null }
     expect(body.content).toContain('read the full content here')
+    expect(body.frontmatter).toBeNull()
+  })
+
+  test('should return frontmatter via GET /document for markdown', async () => {
+    const content = '---\ntitle: Report\nstatus: draft\n---\n\n# Report body\n\nparagraph with content'
+    const addRes = await fetch(`${base}/admin/kbs/docs/documents`, {
+      method: 'POST',
+      headers: { ...AUTH, ...JSON_HEADERS },
+      body: JSON.stringify({ path: 'report.md', content }),
+    })
+    expect(addRes.status).toBe(200)
+
+    const res = await fetch(`${base}/document?kb=docs&path=${encodeURIComponent('report.md')}`, { headers: AUTH })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string; frontmatter: Record<string, string> }
+    expect(body.frontmatter).toEqual({ title: 'Report', status: 'draft' })
+    expect(body.content).toContain('paragraph with content')
+    expect(body.content).not.toContain('title: Report')
   })
 
   test('should search across multiple knowledge bases via comma-separated kb', async () => {

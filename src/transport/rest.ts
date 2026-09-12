@@ -110,12 +110,12 @@ export const createRestApp = async (store: Store) => {
       return
     }
     try {
-      const content = await readDocument(decodeURIComponent(kb), decodeURIComponent(path))
-      if (content === null) {
+      const doc = await readDocument(decodeURIComponent(kb), decodeURIComponent(path))
+      if (doc === null) {
         reply.code(404).send({ error: 'document not found' })
         return
       }
-      reply.send({ kb, path, content })
+      reply.send({ kb, path, content: doc.content, frontmatter: doc.frontmatter })
     } catch (err) {
       if (err instanceof Error && err.message === 'invalid path') {
         reply.code(400).send({ error: 'invalid path' })

@@ -12,7 +12,7 @@
 
 ### #3 [FEAT] Content extraction improvement: markdown section metadata, metadata YAML frontmatter
 
-- [ ] Implementation
+- [x] Implementation
 
 ### #4 [FEAT] Open WebUI default tool model binding, per-user access via custom headers
 

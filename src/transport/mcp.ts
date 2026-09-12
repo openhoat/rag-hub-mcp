@@ -172,11 +172,12 @@ ${r.content}`,
 
     case 'rag_read': {
       const { kb, path } = z.object(readArgs).parse(args)
-      const content = await readDocument(kb, path)
-      if (content === null) {
+      const doc = await readDocument(kb, path)
+      if (doc === null) {
         return { content: [{ type: 'text', text: `Document not found: **${kb}/${path}**` }], isError: true }
       }
-      return { content: [{ type: 'text', text: content }] }
+      const text = formatDoc(doc.content, doc.frontmatter)
+      return { content: [{ type: 'text', text }] }
     }
 
     case 'rag_delete_kb': {
@@ -213,4 +214,12 @@ const fmt = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const formatDoc = (content: string, frontmatter: Record<string, string> | null): string => {
+  if (!frontmatter || Object.keys(frontmatter).length === 0) return content
+  const meta = Object.entries(frontmatter)
+    .map(([k, v]) => `- **${k}**: ${v}`)
+    .join('\n')
+  return `**Frontmatter:**\n${meta}\n\n---\n\n${content}`
 }

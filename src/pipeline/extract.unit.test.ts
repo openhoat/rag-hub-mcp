@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { extractText, isTextFile } from './extract.js'
+import { extractText, isTextFile, parseFrontmatter } from './extract.js'
 
 const makeDir = (): string => {
   return mkdtempSync(join(tmpdir(), 'rag-extract-'))
@@ -13,7 +13,9 @@ describe('extractText', () => {
     const dir = makeDir()
     const p = join(dir, 'a.txt')
     writeFileSync(p, 'hello rag', 'utf-8')
-    expect(await extractText(p)).toBe('hello rag')
+    const { text, frontmatter } = await extractText(p)
+    expect(text).toBe('hello rag')
+    expect(frontmatter).toBeNull()
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -21,7 +23,7 @@ describe('extractText', () => {
     const dir = makeDir()
     const p = join(dir, 'doc.md')
     writeFileSync(p, '# Title', 'utf-8')
-    expect(await extractText(p)).toBe('# Title')
+    expect((await extractText(p)).text).toBe('# Title')
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -29,7 +31,7 @@ describe('extractText', () => {
     const dir = makeDir()
     const p = join(dir, 'binary.bin')
     writeFileSync(p, '\u0000\u0001\u0002')
-    expect(await extractText(p)).toBe('')
+    expect((await extractText(p)).text).toBe('')
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -37,7 +39,7 @@ describe('extractText', () => {
     const dir = makeDir()
     const p = join(dir, 'broken.pdf')
     writeFileSync(p, 'not a pdf')
-    expect(await extractText(p)).toBe('')
+    expect((await extractText(p)).text).toBe('')
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -50,7 +52,7 @@ describe('extractText', () => {
     slide1.file('ppt/slides/slide2.xml', '<a:t>Second</a:t>')
     const buf = await slide1.generateAsync({ type: 'nodebuffer' })
     writeFileSync(p, buf)
-    const text = await extractText(p)
+    const text = (await extractText(p)).text
     expect(text).toContain('Hello')
     expect(text).toContain('World')
     expect(text).toContain('Second')
@@ -71,10 +73,56 @@ describe('extractText', () => {
       'data',
     )
     XLSX.writeFile(wb, p)
-    const text = await extractText(p)
+    const text = (await extractText(p)).text
     expect(text).toContain('alpha')
     expect(text).toContain('beta')
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('should strip frontmatter from markdown and return it as metadata', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'fm.md')
+    writeFileSync(p, '---\ntitle: README\nauthor: Olivier\nstatus: draft\n---\n\n# Body\n\ncontent here', 'utf-8')
+    const { text, frontmatter } = await extractText(p)
+    expect(text).toContain('# Body')
+    expect(text).toContain('content here')
+    expect(text).not.toContain('title: README')
+    expect(frontmatter).toEqual({ title: 'README', author: 'Olivier', status: 'draft' })
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('should handle quoted frontmatter values', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'quoted.md')
+    writeFileSync(p, '---\nsubject: "A "quoted" title"\n---\n\nText.', 'utf-8')
+    const { text, frontmatter } = await extractText(p)
+    expect(text).toBe('Text.')
+    expect(frontmatter).toEqual({ subject: 'A "quoted" title' })
+    rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe('parseFrontmatter', () => {
+  test('should return null frontmatter when none is present', () => {
+    expect(parseFrontmatter('# just a title\n\ntext')).toEqual({ text: '# just a title\n\ntext', frontmatter: null })
+  })
+
+  test('should treat malformed frontmatter as plain text', () => {
+    const raw = '---\nnot a key value line\n---\n\nbody'
+    const { text, frontmatter } = parseFrontmatter(raw)
+    expect(frontmatter).toBeNull()
+    expect(text).toBe(raw)
+  })
+
+  test('should parse key value pairs and strip the delimiters', () => {
+    const { text, frontmatter } = parseFrontmatter('---\ntitle: Hello\n---\n\nContent')
+    expect(text).toBe('Content')
+    expect(frontmatter).toEqual({ title: 'Hello' })
+  })
+
+  test('should strip trailing quotes from values', () => {
+    const { frontmatter } = parseFrontmatter("---\ntitle: 'Single'\ntags: 'a, b'\n---\n\nx")
+    expect(frontmatter).toEqual({ title: 'Single', tags: 'a, b' })
   })
 })
 

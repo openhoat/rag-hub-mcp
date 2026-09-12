@@ -13,7 +13,7 @@ vi.mock('../core/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
-  readDocument: vi.fn(async () => 'full document content'),
+  readDocument: vi.fn(async () => ({ content: 'full document content', frontmatter: null })),
   scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
 }))
 
@@ -71,6 +71,17 @@ describe('handleToolCall', () => {
   test('should read a document and return its full content', async () => {
     const result = await handleToolCall(store(), 'rag_read', { kb: 'kb', path: 'a.md' })
     expect(result.content?.[0]).toEqual({ type: 'text', text: 'full document content' })
+  })
+
+  test('should include frontmatter in rag_read output when present', async () => {
+    const { readDocument } = await import('../core/ingest.js')
+    vi.mocked(readDocument).mockResolvedValueOnce({ content: 'body text', frontmatter: { title: 'Doc', author: 'Olivier' } })
+    const result = await handleToolCall(store(), 'rag_read', { kb: 'kb', path: 'a.md' })
+    const text = result.content?.[0]?.text ?? ''
+    expect(text).toContain('**Frontmatter:**')
+    expect(text).toContain('- **title**: Doc')
+    expect(text).toContain('- **author**: Olivier')
+    expect(text).toContain('body text')
   })
 
   test('should report not found when the document is missing', async () => {

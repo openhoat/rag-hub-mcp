@@ -32,6 +32,36 @@ describe('chunkText', () => {
     expect(meta.headings).toBe('Title > Section')
   })
 
+  test('should assign per-chunk heading context to each section', () => {
+    // Each section is long enough to force its own chunks. Each chunk carries
+    // the heading path of the section it belongs to, not one global heading.
+    const paragraph = 'filler words for this section '.repeat(220) // ~4.6k chars, over MAX_CHARS
+    const text = `# Intro\n\nIntro ${paragraph}\n\n# Install\n\nInstall ${paragraph}\n\n# Usage\n\nUsage ${paragraph}`
+    const chunks = chunkText(text, 'sec.md', 'kb')
+    const metas = chunks.map(c => JSON.parse(c.metadata))
+    const headings = metas.map(m => m.headings)
+    expect(metas.length).toBeGreaterThanOrEqual(3)
+    expect(headings).toContain('Intro')
+    expect(headings).toContain('Install')
+    expect(headings).toContain('Usage')
+    expect(new Set(headings).size).toBeGreaterThan(1)
+  })
+
+  test('should include frontmatter metadata in every chunk', () => {
+    const text = '# Title\n\nSome body content here.'
+    const chunks = chunkText(text, 'fm.md', 'kb', { title: 'Doc', author: 'Olivier' })
+    for (const chunk of chunks) {
+      const meta = JSON.parse(chunk.metadata)
+      expect(meta.frontmatter).toEqual({ title: 'Doc', author: 'Olivier' })
+    }
+  })
+
+  test('should omit frontmatter from metadata when absent', () => {
+    const text = '# Title\n\nBody.'
+    const meta = JSON.parse(chunkText(text, 'nf.md', 'kb')[0].metadata)
+    expect(meta.frontmatter).toBeUndefined()
+  })
+
   test('should produce overlapping chunks for continuity', () => {
     const paragraph = 'filler words that repeat '.repeat(200) // ~4.7k chars
     const text = Array.from({ length: 6 }, () => paragraph).join('\n\n')

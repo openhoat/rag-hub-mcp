@@ -9,7 +9,7 @@ vi.mock('../core/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
-  readDocument: vi.fn(async () => 'extracted text'),
+  readDocument: vi.fn(async () => ({ content: 'extracted text', frontmatter: null })),
   scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
 }))
 vi.mock('../core/search.js', () => ({
@@ -143,11 +143,21 @@ describe('rest', () => {
   })
 
   test('GET /document should return extracted content', async () => {
-    mockedRead.mockResolvedValueOnce('extracted text')
+    mockedRead.mockResolvedValueOnce({ content: 'extracted text', frontmatter: null })
     const res = await fetch(`${base}/document?kb=kb&path=notes%2Farch.md`, { headers: AUTH })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { content: string }
+    const body = (await res.json()) as { content: string; frontmatter: Record<string, string> | null }
     expect(body.content).toBe('extracted text')
+    expect(body.frontmatter).toBeNull()
+  })
+
+  test('GET /document should return frontmatter metadata when present', async () => {
+    mockedRead.mockResolvedValueOnce({ content: 'body', frontmatter: { title: 'Intro', status: 'draft' } })
+    const res = await fetch(`${base}/document?kb=kb&path=notes%2Fintro.md`, { headers: AUTH })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string; frontmatter: Record<string, string> }
+    expect(body.content).toBe('body')
+    expect(body.frontmatter).toEqual({ title: 'Intro', status: 'draft' })
   })
 
   test('GET /document should require kb and path', async () => {
