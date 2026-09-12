@@ -13,6 +13,7 @@ vi.mock('../core/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
+  readDocument: vi.fn(async () => 'full document content'),
   scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
 }))
 
@@ -43,6 +44,14 @@ describe('handleToolCall', () => {
     expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('result snippet') })
   })
 
+  test('should split comma-separated kb into an array for search', async () => {
+    const { search } = await import('../core/search.js')
+    const mockedSearch = vi.mocked(search)
+    mockedSearch.mockResolvedValueOnce([{ kb: 'kb', relPath: 'f.md', chunkIndex: 0, content: 'hit', score: 0.5 }])
+    await handleToolCall(store(), 'rag_search', { query: 'hello', kb: 'infra,dev' })
+    expect(mockedSearch).toHaveBeenCalledWith(expect.anything(), { query: 'hello', kb: ['infra', 'dev'], topK: 10 })
+  })
+
   test('should add a document passing the raw path through for containment check', async () => {
     const result = await handleToolCall(store(), 'rag_add_document', {
       kb: 'kb',
@@ -57,6 +66,20 @@ describe('handleToolCall', () => {
     const result = await handleToolCall(store(), 'rag_delete_document', { kb: 'kb', path: 'a.md' })
     expect(mockedDelete).toHaveBeenCalledTimes(1)
     expect(result.content?.[0]).toEqual({ type: 'text', text: 'Document deleted: **kb/a.md**' })
+  })
+
+  test('should read a document and return its full content', async () => {
+    const result = await handleToolCall(store(), 'rag_read', { kb: 'kb', path: 'a.md' })
+    expect(result.content?.[0]).toEqual({ type: 'text', text: 'full document content' })
+  })
+
+  test('should report not found when the document is missing', async () => {
+    const { readDocument } = await import('../core/ingest.js')
+    const mockedRead = vi.mocked(readDocument)
+    mockedRead.mockResolvedValueOnce(null)
+    const result = await handleToolCall(store(), 'rag_read', { kb: 'kb', path: 'missing.md' })
+    expect(result.isError).toBe(true)
+    expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('not found') })
   })
 
   test('should delete a knowledge base', async () => {

@@ -216,6 +216,13 @@ export const deleteKb = async (store: Store, kb: string, root: string = KB_ROOT)
   }
 }
 
+export const readDocument = async (kb: string, relPath: string, root: string = KB_ROOT): Promise<string | null> => {
+  const fullPath = sanitizeRelativePath(root, kb, relPath)
+  if (!existsSync(fullPath)) return null
+  const text = await extractText(fullPath)
+  return text || null
+}
+
 const loadKnownFiles = (store: Store): Map<string, KnownFile> => {
   const map = new Map<string, KnownFile>()
   const rows = store.db

@@ -2,7 +2,7 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
+import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import { getLogger } from '../log.js'
 import type { Store } from '../types.js'
@@ -102,6 +102,29 @@ export const createRestApp = async (store: Store) => {
     reply.send({ status: 'deleted_kb', kb: req.params.kb })
   })
 
+  app.get<{ Querystring: { kb: string; path: string } }>('/document', async (req, reply) => {
+    if (!auth(req, reply)) return
+    const { kb, path } = req.query
+    if (!kb || !path) {
+      reply.code(400).send({ error: 'kb and path required' })
+      return
+    }
+    try {
+      const content = await readDocument(decodeURIComponent(kb), decodeURIComponent(path))
+      if (content === null) {
+        reply.code(404).send({ error: 'document not found' })
+        return
+      }
+      reply.send({ kb, path, content })
+    } catch (err) {
+      if (err instanceof Error && err.message === 'invalid path') {
+        reply.code(400).send({ error: 'invalid path' })
+        return
+      }
+      throw err
+    }
+  })
+
   app.post('/admin/reindex', reindexLimiter, async (_req, reply) => {
     if (!auth(_req, reply)) return
     const result = await scanAll(store)
@@ -120,9 +143,15 @@ export const createRestApp = async (store: Store) => {
       reply.code(400).send({ error: 'query required' })
       return
     }
+    const kbList = kb
+      ? kb
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : undefined
     const results = await search(store, {
       query,
-      kb,
+      kb: kbList,
       topK: top_k ? Number.parseInt(top_k, 10) : 10,
     })
     reply.send({ results })

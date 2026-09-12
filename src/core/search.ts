@@ -4,7 +4,7 @@ import type { ChunkRecord, SearchResult, Store } from '../types.js'
 
 export interface SearchParams {
   query: string
-  kb?: string
+  kb?: string | string[]
   topK?: number
 }
 
@@ -12,7 +12,8 @@ export const search = async (store: Store, params: SearchParams): Promise<Search
   const { query, kb, topK = 10 } = params
 
   const queryEmb = await embedQueries(query)
-  const allChunks = kb ? store.getAllChunks(kb) : store.getAllChunks()
+  const filteredKb = Array.isArray(kb) && kb.length === 0 ? undefined : kb
+  const allChunks = filteredKb ? store.getAllChunks(filteredKb) : store.getAllChunks()
   const ftsScores = buildFtsScores(store, query)
   const useFts = ftsScores !== null
   const scored: { id: number; content: string; metadata: string; score: number }[] = []

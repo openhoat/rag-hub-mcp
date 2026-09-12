@@ -15,7 +15,7 @@ vi.mock('../pipeline/extract.js', () => ({
   TEXT_EXTENSIONS: new Set(['.md']),
 }))
 
-import { addDocument, deleteDocument, deleteKb, scanAll } from './ingest.js'
+import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from './ingest.js'
 
 let root: string
 let store: Store
@@ -117,6 +117,32 @@ describe('deleteDocument', () => {
     root = setup.root
     store = setup.store
     await expect(deleteDocument(store, 'docs', '../../etc/passwd', root)).rejects.toThrow('invalid path')
+  })
+})
+
+describe('readDocument', () => {
+  test('should return extracted content for an existing file', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    const content = await readDocument('docs', 'a.md', root)
+    expect(content).toBe('extracted content')
+  })
+
+  test('should return null for a missing file', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const content = await readDocument('docs', 'missing.md', root)
+    expect(content).toBeNull()
+  })
+
+  test('should reject paths escaping the KB root', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    await expect(readDocument('docs', '../../etc/passwd', root)).rejects.toThrow('invalid path')
   })
 })
 

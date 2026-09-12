@@ -4,11 +4,11 @@
 
 ### #1 [FEAT] MCP tool `rag_read` — retrieve full document content by path
 
-- [ ] Implementation
+- [x] Implementation
 
 ### #2 [FEAT] Search with KB filter accepts comma-separated list (`kb="infra,dev"`)
 
-- [ ] Implementation
+- [x] Implementation
 
 ### #3 [FEAT] Content extraction improvement: markdown section metadata, metadata YAML frontmatter
 

@@ -71,6 +71,25 @@ describe('store', () => {
     cleanup(dir, store)
   })
 
+  test('should filter chunks across multiple knowledge bases', () => {
+    const { store, dir } = makeStore()
+    for (const kb of ['dev', 'infra', 'ops']) {
+      store.addKb(kb)
+      const kbId = store.getKbId(kb)
+      const fileId = store.upsertFile({ kbId, relPath: `${kb}.md`, sha256: 's', mtime: 1, bytes: 5 })
+      store.insertChunk({ fileId, chunkIndex: 0, content: `content ${kb}`, metadata: '{}', embedding: null })
+    }
+    expect(
+      store
+        .getAllChunks(['dev', 'infra'])
+        .map(c => c.content)
+        .sort(),
+    ).toEqual(['content dev', 'content infra'])
+    expect(store.getAllChunks('dev')).toHaveLength(1)
+    expect(store.getAllChunks(['ops'])).toHaveLength(1)
+    cleanup(dir, store)
+  })
+
   test('should report kb stats (doc and chunk counts)', () => {
     const { store, dir } = makeStore()
     store.addKb('kb')

@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from 'node:http'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
+import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import { makeStubStore, startHttpServer } from '../testing/helpers.js'
 import { createRestApp } from './rest.js'
@@ -9,6 +9,7 @@ vi.mock('../core/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
+  readDocument: vi.fn(async () => 'extracted text'),
   scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
 }))
 vi.mock('../core/search.js', () => ({
@@ -20,6 +21,7 @@ const mockedDelete = vi.mocked(deleteDocument)
 const mockedDeleteKb = vi.mocked(deleteKb)
 const mockedScan = vi.mocked(scanAll)
 const mockedSearch = vi.mocked(search)
+const mockedRead = vi.mocked(readDocument)
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
@@ -83,6 +85,13 @@ describe('rest', () => {
     expect(body.results[0].relPath).toBe('f.md')
   })
 
+  test('GET /search should split comma-separated kb into an array', async () => {
+    mockedSearch.mockResolvedValueOnce([{ kb: 'kb', relPath: 'f.md', chunkIndex: 0, content: 'hit', score: 0.5 }])
+    const res = await fetch(`${base}/search?query=hello&kb=infra,dev`, { headers: AUTH })
+    expect(res.status).toBe(200)
+    expect(mockedSearch).toHaveBeenCalledWith(expect.anything(), { query: 'hello', kb: ['infra', 'dev'], topK: 10 })
+  })
+
   test('POST /admin/kbs/:kb/documents should add with raw path and string content', async () => {
     mockedAdd.mockResolvedValueOnce()
     const res = await fetch(`${base}/admin/kbs/docs/documents`, {
@@ -131,6 +140,31 @@ describe('rest', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { kbs: Array<{ name: string }> }
     expect(body.kbs[0].name).toBe('kb')
+  })
+
+  test('GET /document should return extracted content', async () => {
+    mockedRead.mockResolvedValueOnce('extracted text')
+    const res = await fetch(`${base}/document?kb=kb&path=notes%2Farch.md`, { headers: AUTH })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string }
+    expect(body.content).toBe('extracted text')
+  })
+
+  test('GET /document should require kb and path', async () => {
+    const res = await fetch(`${base}/document`, { headers: AUTH })
+    expect(res.status).toBe(400)
+  })
+
+  test('GET /document should return 404 when the document is missing', async () => {
+    mockedRead.mockResolvedValueOnce(null)
+    const res = await fetch(`${base}/document?kb=kb&path=missing.md`, { headers: AUTH })
+    expect(res.status).toBe(404)
+  })
+
+  test('GET /document should return 400 on invalid path', async () => {
+    mockedRead.mockRejectedValueOnce(new Error('invalid path'))
+    const res = await fetch(`${base}/document?kb=kb&path=../evil.md`, { headers: AUTH })
+    expect(res.status).toBe(400)
   })
 
   test('GET /admin/kbs/:kb/documents should list files', async () => {

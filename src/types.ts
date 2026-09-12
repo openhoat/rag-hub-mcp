@@ -55,7 +55,7 @@ export interface Store {
   removeKb(name: string): void
   insertChunk(rec: Omit<ChunkRecord, 'id'>): number
   deleteChunks(fileId: number): void
-  getAllChunks(kb?: string): ChunkRecord[]
+  getAllChunks(kb?: string | string[]): ChunkRecord[]
   purgeKb(kbId: number): void
 }
 

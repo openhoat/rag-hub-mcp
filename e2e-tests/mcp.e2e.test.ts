@@ -144,12 +144,13 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     expect(list.res.status).toBe(200)
     const tools = (list.messages.find(m => m.id === 2)?.result as { tools: Array<{ name: string }> })?.tools ?? []
     const names = tools.map(t => t.name)
-    expect(names).toHaveLength(8)
+    expect(names).toHaveLength(9)
     expect(names).toEqual(
       expect.arrayContaining([
         'rag_list_kbs',
         'rag_list_documents',
         'rag_search',
+        'rag_read',
         'rag_add_document',
         'rag_delete_document',
         'rag_delete_kb',
@@ -214,25 +215,39 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     const addResult = add.messages.find(m => m.id === 10)?.result as { content?: Array<{ text?: string }> }
     expect(addResult?.content?.[0]?.text).toContain('Document added')
 
-    const searchHit = await postSse(
+    const readAdded = await postSse(
       base,
       {
         jsonrpc: '2.0',
         id: 11,
+        method: 'tools/call',
+        params: { name: 'rag_read', arguments: { kb: 'pipe', path: 'notes/hello.md' } },
+      },
+      sessionId,
+    )
+    expect(readAdded.res.status).toBe(200)
+    const readText = readAdded.messages.find(m => m.id === 11)?.result as { content?: Array<{ text?: string }> }
+    expect(readText?.content?.[0]?.text).toContain('the quick brown fox')
+
+    const searchHit = await postSse(
+      base,
+      {
+        jsonrpc: '2.0',
+        id: 12,
         method: 'tools/call',
         params: { name: 'rag_search', arguments: { query: 'quick fox', kb: 'pipe' } },
       },
       sessionId,
     )
     expect(searchHit.res.status).toBe(200)
-    const searchText = searchHit.messages.find(m => m.id === 11)?.result as { content?: Array<{ text?: string }> }
+    const searchText = searchHit.messages.find(m => m.id === 12)?.result as { content?: Array<{ text?: string }> }
     expect(searchText?.content?.[0]?.text ?? '').not.toContain('No results found.')
 
     const del = await postSse(
       base,
       {
         jsonrpc: '2.0',
-        id: 12,
+        id: 13,
         method: 'tools/call',
         params: { name: 'rag_delete_document', arguments: { kb: 'pipe', path: 'notes/hello.md' } },
       },
@@ -244,13 +259,13 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
       base,
       {
         jsonrpc: '2.0',
-        id: 13,
+        id: 14,
         method: 'tools/call',
         params: { name: 'rag_search', arguments: { query: 'quick fox', kb: 'pipe' } },
       },
       sessionId,
     )
-    const missText = searchMiss.messages.find(m => m.id === 13)?.result as { content?: Array<{ text?: string }> }
+    const missText = searchMiss.messages.find(m => m.id === 14)?.result as { content?: Array<{ text?: string }> }
     expect(missText?.content?.[0]?.text).toContain('No results found.')
   })
 

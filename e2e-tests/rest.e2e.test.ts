@@ -114,6 +114,46 @@ describe('REST API (real store + ingest + search)', () => {
     expect(docs.some(d => d.relPath === 'evil.md')).toBe(false)
   })
 
+  test('should reject path traversal in document creation', async () => {
+    const addRes = await fetch(`${base}/admin/kbs/docs/documents`, {
+      method: 'POST',
+      headers: { ...AUTH, ...JSON_HEADERS },
+      body: JSON.stringify({ path: '../../evil.md', content: 'escaped content' }),
+    })
+    expect(addRes.status).toBe(400)
+
+    // The document must not be indexed under the KB root.
+    const docsRes = await fetch(`${base}/admin/kbs/docs/documents`, { headers: AUTH })
+    const docs = (await docsRes.json()) as Array<{ relPath: string }>
+    expect(docs.some(d => d.relPath === 'evil.md')).toBe(false)
+  })
+
+  test('should read a document via GET /document', async () => {
+    const addRes = await fetch(`${base}/admin/kbs/docs/documents`, {
+      method: 'POST',
+      headers: { ...AUTH, ...JSON_HEADERS },
+      body: JSON.stringify({ path: 'readme.md', content: 'read the full content here' }),
+    })
+    expect(addRes.status).toBe(200)
+
+    const encoded = encodeURIComponent('readme.md')
+    const res = await fetch(`${base}/document?kb=docs&path=${encoded}`, { headers: AUTH })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string }
+    expect(body.content).toContain('read the full content here')
+  })
+
+  test('should search across multiple knowledge bases via comma-separated kb', async () => {
+    writeKbDocument(process.env.KB_ROOT as string, 'kbAlpha', 'a.md', 'alpha beta shared')
+    writeKbDocument(process.env.KB_ROOT as string, 'kbBeta', 'b.md', 'gamma beta shared')
+    await fetch(`${base}/admin/reindex`, { method: 'POST', headers: AUTH })
+
+    const res = await fetch(`${base}/search?query=beta&kb=kbAlpha,kbBeta`, { headers: AUTH })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { results: Array<{ kb: string }> }
+    expect(body.results.length).toBeGreaterThanOrEqual(1)
+  })
+
   test('should require auth on admin endpoints', async () => {
     const res = await fetch(`${base}/admin/status`)
     expect(res.status).toBe(401)

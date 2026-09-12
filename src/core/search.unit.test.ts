@@ -9,8 +9,9 @@ import { search } from './search.js'
 const makeStore = (chunks: ChunkRecord[], db: unknown = {}): Store => {
   return makeStubStore({
     db: db as never,
-    getAllChunks(kb?: string): ChunkRecord[] {
-      if (kb) return chunks.filter(c => (JSON.parse(c.metadata) as { kb: string }).kb === kb)
+    getAllChunks(kb?: string | string[]): ChunkRecord[] {
+      const names = kb ? (Array.isArray(kb) ? kb : [kb]) : null
+      if (names) return chunks.filter(c => names.includes((JSON.parse(c.metadata) as { kb: string }).kb))
       return chunks
     },
   })
@@ -53,6 +54,19 @@ describe('search', () => {
     const store = makeStore([makeChunk(1, 'kbA', 'shared token content'), makeChunk(2, 'kbB', 'shared token content')])
     const results = await search(store, { query: 'shared', kb: 'kbA', topK: 10 })
     expect(results.every(r => r.kb === 'kbA')).toBe(true)
+  })
+
+  test('should filter across multiple knowledge bases', async () => {
+    const store = makeStore([makeChunk(1, 'kbA', 'shared token content'), makeChunk(2, 'kbB', 'shared token content')])
+    const results = await search(store, { query: 'shared', kb: ['kbA', 'kbB'], topK: 10 })
+    expect(results.length).toBe(2)
+    expect(results.map(r => r.kb).sort()).toEqual(['kbA', 'kbB'])
+  })
+
+  test('should treat empty kb array as searching all knowledge bases', async () => {
+    const store = makeStore([makeChunk(1, 'kbA', 'alpha content'), makeChunk(2, 'kbB', 'alpha other')])
+    const results = await search(store, { query: 'alpha', kb: [], topK: 10 })
+    expect(results.length).toBe(2)
   })
 
   test('should return no results without vector or keyword match', async () => {

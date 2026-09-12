@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
-import { addDocument, deleteDocument, deleteKb, scanAll } from '../core/ingest.js'
+import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import type { Store } from '../types.js'
 
@@ -13,8 +13,22 @@ const RAG_VERSION = process.env.RAG_VERSION || '0.0.1'
 const kbArgs = { kb: z.string().describe('Knowledge base name') }
 const searchArgs = {
   query: z.string().describe('Natural language query'),
-  kb: z.string().optional().describe('Knowledge base name (optional, all if omitted)'),
+  kb: z.string().optional().describe('Knowledge base name(s), comma-separated for multiple (eg "infra,dev"). Omit to search all.'),
   top_k: z.number().optional().describe('Number of results (default 10)'),
+}
+
+/**
+ * Split a comma-separated `kb` string into a normalized list. Undefined/empty
+ * yields undefined (search all); the SDK passes raw (untransformed) args to
+ * handleToolCall, so the split happens here rather than in the zod schema.
+ */
+const normalizeKb = (kb: string | undefined): string[] | undefined => {
+  if (!kb) return undefined
+  const names = kb
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+  return names.length > 0 ? names : undefined
 }
 const addDocArgs = {
   kb: z.string().describe('Knowledge base name'),
@@ -22,6 +36,10 @@ const addDocArgs = {
   content: z.string().describe('Text or markdown content'),
 }
 const deleteDocArgs = {
+  kb: z.string().describe('Knowledge base name'),
+  path: z.string().describe('Document relative path'),
+}
+const readArgs = {
   kb: z.string().describe('Knowledge base name'),
   path: z.string().describe('Document relative path'),
 }
@@ -53,6 +71,15 @@ export const createMcpServer = (store: Store): McpServer => {
       inputSchema: addDocArgs,
     },
     async args => handleToolCall(store, 'rag_add_document', args),
+  )
+
+  server.registerTool(
+    'rag_read',
+    {
+      description: 'Retrieve the full extracted content of a document by KB and path.',
+      inputSchema: readArgs,
+    },
+    async args => handleToolCall(store, 'rag_read', args),
   )
 
   server.registerTool(
@@ -119,7 +146,7 @@ export const handleToolCall = async (store: Store, name: string, args: Record<st
     case 'rag_search': {
       const { query, kb, top_k } = z.object(searchArgs).parse(args)
       const topK = top_k ?? 10
-      const results = await search(store, { query, kb, topK })
+      const results = await search(store, { query, kb: normalizeKb(kb), topK })
       if (results.length === 0) {
         return { content: [{ type: 'text', text: 'No results found.' }] }
       }
@@ -141,6 +168,15 @@ ${r.content}`,
       const { kb, path } = z.object(deleteDocArgs).parse(args)
       await deleteDocument(store, kb, path)
       return { content: [{ type: 'text', text: `Document deleted: **${kb}/${path}**` }] }
+    }
+
+    case 'rag_read': {
+      const { kb, path } = z.object(readArgs).parse(args)
+      const content = await readDocument(kb, path)
+      if (content === null) {
+        return { content: [{ type: 'text', text: `Document not found: **${kb}/${path}**` }], isError: true }
+      }
+      return { content: [{ type: 'text', text: content }] }
     }
 
     case 'rag_delete_kb': {

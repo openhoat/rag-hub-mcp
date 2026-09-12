@@ -150,19 +150,19 @@ class StoreImpl implements Store {
     this.db.prepare('DELETE FROM chunks WHERE file_id = ?').run(fileId)
   }
 
-  getAllChunks = (kb?: string): ChunkRecord[] => {
-    if (kb) {
-      const kbId = this.getKbId(kb)
-      if (!kbId) return []
-      return this.db
-        .prepare(`
+  getAllChunks = (kb?: string | string[]): ChunkRecord[] => {
+    if (!kb) return this.db.prepare('SELECT * FROM chunks').all() as ChunkRecord[]
+    const names = Array.isArray(kb) ? kb : [kb]
+    const kbIds = names.map(name => this.getKbId(name)).filter(id => id !== 0)
+    if (kbIds.length === 0) return []
+    const placeholders = kbIds.map(() => '?').join(', ')
+    return this.db
+      .prepare(`
         SELECT c.* FROM chunks c
         JOIN files f ON c.file_id = f.id
-        WHERE f.kb_id = ?
+        WHERE f.kb_id IN (${placeholders})
       `)
-        .all(kbId) as ChunkRecord[]
-    }
-    return this.db.prepare('SELECT * FROM chunks').all() as ChunkRecord[]
+      .all(...kbIds) as ChunkRecord[]
   }
 }
 
