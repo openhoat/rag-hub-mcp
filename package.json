@@ -29,19 +29,17 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
-    "build:docs": "vitepress build docs",
-    "coverage": "vitest run --coverage",
-    "format": "biome check --formatter-enabled=true --linter-enabled=false src/",
-    "lint": "biome check --formatter-enabled=false --linter-enabled=true src/",
-    "qa": "biome check src/ && tsc --noEmit && npm run test",
-    "qa:fix": "biome check --write src/ && biome check --formatter-enabled=false --linter-enabled=true src/",
-    "sonar": "sonar-scanner-npm",
+    "build": "wireit",
+    "build:docs": "wireit",
+    "coverage": "wireit",
+    "qa": "wireit",
+    "qa:fix": "biome check --write src/",
+    "sonar": "wireit",
     "start": "node dist/index.js",
     "start:docs": "vitepress dev docs",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "validate": "npm run qa && npm run build"
+    "test": "wireit",
+    "typecheck": "wireit",
+    "validate": "wireit"
   },
   "main": "dist/index.js",
   "volta": {
@@ -68,11 +66,54 @@
     "@types/node": "22.20.2",
     "@types/pdf-parse": "1.1.5",
     "@vitest/coverage-v8": "5.0.0",
-    "sonarqube-scanner": "5.0.0",
     "mermaid": "11.16.0",
+    "sonarqube-scanner": "5.0.0",
     "typescript": "5.9.3",
     "vitepress": "1.6.4",
     "vitepress-plugin-mermaid": "2.0.17",
-    "vitest": "5.0.0"
+    "vitest": "5.0.0",
+    "wireit": "0.14.13"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc",
+      "files": ["tsconfig.json", "src/**/*.ts"],
+      "output": ["dist/**/*.js", "dist/**/*.d.ts"]
+    },
+    "build:docs": {
+      "command": "vitepress build docs",
+      "files": ["docs/**/*.md", "docs/.vitepress/config.mts", "docs/public/**"],
+      "output": ["docs/.vitepress/dist/**"]
+    },
+    "coverage": {
+      "command": "vitest run --coverage",
+      "files": ["src/**/*.ts", "vitest.config.ts", "vitest.setup.ts"],
+      "output": ["dist/coverage/**"]
+    },
+    "qa": {
+      "command": "biome check src/",
+      "dependencies": ["typecheck", "test"],
+      "files": ["biome.json", "src/**/*.ts"],
+      "output": []
+    },
+    "sonar": {
+      "command": "sonar-scanner-npm",
+      "dependencies": ["coverage"],
+      "files": ["sonar-project.properties", "src/**/*.ts"],
+      "output": ["dist/.scannerwork/**"]
+    },
+    "test": {
+      "command": "vitest run",
+      "files": ["src/**/*.ts", "vitest.config.ts", "vitest.setup.ts"],
+      "output": []
+    },
+    "typecheck": {
+      "command": "tsc --noEmit",
+      "files": ["tsconfig.json", "src/**/*.ts"],
+      "output": []
+    },
+    "validate": {
+      "dependencies": ["qa", "build"]
+    }
   }
 }

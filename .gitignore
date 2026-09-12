@@ -4,6 +4,8 @@
 # Generated artifacts — build, coverage and sonar all live under dist/
 dist/
 node_modules/
+.wireit/
+.vitest/
 
 # VitePress build output & cache
 .vitepress/
