@@ -1,5 +1,3 @@
-import type Database from 'better-sqlite3'
-
 export interface FileRecord {
   id?: number
   kbId: number
@@ -41,22 +39,40 @@ export interface SearchResult {
   score: number
 }
 
+export interface KnownFileRow {
+  id: number
+  relPath: string
+  sha256: string
+  mtime: number
+  bytes: number
+  kbName: string
+}
+
+export interface FtsRow {
+  id: number
+  rank: number
+}
+
 export interface Store {
-  db: Database.Database
-  close(): void
-  listKbs(): KbInfo[]
-  listFiles(kb: string): DocInfo[]
-  getFile(kbId: number, relPath: string): FileRecord | null
-  upsertFile(rec: FileRecord): number
-  deleteFile(id: number): void
-  deleteFilesByKb(kbId: number): void
-  getKbId(kbName: string): number
-  addKb(name: string): void
-  removeKb(name: string): void
-  insertChunk(rec: Omit<ChunkRecord, 'id'>): number
-  deleteChunks(fileId: number): void
-  getAllChunks(kb?: string | string[]): ChunkRecord[]
-  purgeKb(kbId: number): void
+  close(): Promise<void>
+  listKbs(): Promise<KbInfo[]>
+  listFiles(kb: string): Promise<DocInfo[]>
+  getFile(kbId: number, relPath: string): Promise<FileRecord | null>
+  upsertFile(rec: FileRecord): Promise<number>
+  deleteFile(id: number): Promise<void>
+  deleteFilesByKb(kbId: number): Promise<void>
+  getKbId(kbName: string): Promise<number>
+  addKb(name: string): Promise<void>
+  removeKb(name: string): Promise<void>
+  insertChunk(rec: Omit<ChunkRecord, 'id'>): Promise<number>
+  deleteChunks(fileId: number): Promise<void>
+  getAllChunks(kb?: string | string[]): Promise<ChunkRecord[]>
+  purgeKb(kbId: number): Promise<void>
+  updateFileMtime(id: number, mtime: number): Promise<void>
+  listAllKbs(): Promise<{ id: number; name: string }[]>
+  getKbName(kbId: number): Promise<string>
+  listKnownFiles(): Promise<KnownFileRow[]>
+  searchFts(matchQuery: string): Promise<FtsRow[] | null>
 }
 
 export interface IngestResult {

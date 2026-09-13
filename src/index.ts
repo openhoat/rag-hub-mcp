@@ -211,8 +211,13 @@ const registerMcpEndpoints = async (
 const registerShutdown = (store: Store): void => {
   const shutdown = (signal: string) => {
     logger.info(`${signal} received, shutting down`)
-    store.close()
-    process.exit(0)
+    void (async () => {
+      try {
+        await store.close()
+      } finally {
+        process.exit(0)
+      }
+    })()
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT', () => shutdown('SIGINT'))

@@ -123,10 +123,10 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     base = `http://127.0.0.1:${addr.port}`
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     restoreFetch?.()
     server?.close()
-    store?.close()
+    await store?.close()
     if (root) rmSync(root, { recursive: true, force: true })
   })
 

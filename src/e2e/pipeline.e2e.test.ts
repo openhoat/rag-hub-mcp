@@ -17,9 +17,9 @@ describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> s
     restoreFetch = stubEmbeddingsApi(texts => texts.map(() => unitEmbeddings(4)))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     restoreFetch?.()
-    store?.close()
+    await store?.close()
     if (root) rmSync(root, { recursive: true, force: true })
   })
 
@@ -37,7 +37,7 @@ describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> s
     const result = await scanAll(store, root)
     expect(result.added).toBe(2)
 
-    const kbs = store.listKbs()
+    const kbs = await store.listKbs()
     expect(kbs.length).toBe(1)
     expect(kbs[0].name).toBe('kb1')
     expect(kbs[0].docCount).toBe(2)

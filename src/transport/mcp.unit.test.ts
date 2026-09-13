@@ -23,8 +23,8 @@ const mockedDeleteKb = vi.mocked(deleteKb)
 
 const store = (listKbs = true, listFiles = true): Store => {
   return makeStubStore({
-    listKbs: () => (listKbs ? [{ name: 'kb', docCount: 1, chunkCount: 2, totalBytes: 42 }] : []),
-    listFiles: () => (listFiles ? [{ relPath: 'a.md', sha256: 'x', mtime: 1, bytes: 42, chunkCount: 2 }] : []),
+    listKbs: async () => (listKbs ? [{ name: 'kb', docCount: 1, chunkCount: 2, totalBytes: 42 }] : []),
+    listFiles: async () => (listFiles ? [{ relPath: 'a.md', sha256: 'x', mtime: 1, bytes: 42, chunkCount: 2 }] : []),
   })
 }
 

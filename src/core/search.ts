@@ -13,8 +13,8 @@ export const search = async (store: Store, params: SearchParams): Promise<Search
 
   const queryEmb = await embedQueries(query)
   const filteredKb = Array.isArray(kb) && kb.length === 0 ? undefined : kb
-  const allChunks = filteredKb ? store.getAllChunks(filteredKb) : store.getAllChunks()
-  const ftsScores = buildFtsScores(store, query)
+  const allChunks = filteredKb ? await store.getAllChunks(filteredKb) : await store.getAllChunks()
+  const ftsScores = await buildFtsScores(store, query)
   const useFts = ftsScores !== null
   const scored: { id: number; content: string; metadata: string; score: number }[] = []
 
@@ -72,22 +72,15 @@ const scoreVector = (queryEmb: Float32Array | undefined, chunk: ChunkRecord, wei
   return sim > 0.08 ? sim * weight : 0
 }
 
-const buildFtsScores = (store: Store, query: string): Map<number, number> | null => {
+const buildFtsScores = async (store: Store, query: string): Promise<Map<number, number> | null> => {
   const scores = new Map<number, number>()
   const words = query.split(/\s+/).filter(w => w.length > 2)
   if (words.length === 0) return null
-  if (!store.db?.prepare) return null
   const matchQuery = words.map(w => `"${w}"`).join(' AND ')
-  try {
-    const rows = (store.db.prepare('SELECT rowid AS id, rank FROM fts_chunks WHERE fts_chunks MATCH ?').all(matchQuery) ?? []) as {
-      id: number
-      rank: number
-    }[]
-    for (const row of rows) {
-      scores.set(row.id, clamp(1 / (1 + Math.abs(row.rank)), 0, 1))
-    }
-  } catch {
-    return null
+  const rows = await store.searchFts(matchQuery)
+  if (rows === null) return null
+  for (const row of rows) {
+    scores.set(row.id, clamp(1 / (1 + Math.abs(row.rank)), 0, 1))
   }
   return scores
 }

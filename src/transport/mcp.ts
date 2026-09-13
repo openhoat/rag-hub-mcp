@@ -132,14 +132,14 @@ export const createStreamableHttpTransport = (options?: StreamableHttpTransportO
 export const handleToolCall = async (store: Store, name: string, args: Record<string, unknown>): Promise<ToolResult> => {
   switch (name) {
     case 'rag_list_kbs': {
-      const kbs = store.listKbs()
+      const kbs = await store.listKbs()
       const lines = kbs.map(k => `- **${k.name}**: ${k.docCount} documents, ${k.chunkCount} chunks, ${fmt(k.totalBytes)}`)
       return { content: [{ type: 'text', text: lines.join('\n') || 'No knowledge bases.' }] }
     }
 
     case 'rag_list_documents': {
       const { kb } = z.object(kbArgs).parse(args)
-      const docs = store.listFiles(kb)
+      const docs = await store.listFiles(kb)
       const lines = docs.map(d => `- **${d.relPath}** (${d.chunkCount} chunks, ${fmt(d.bytes)})`)
       return { content: [{ type: 'text', text: lines.join('\n') || 'No documents.' }] }
     }
@@ -195,7 +195,7 @@ ${r.content}`,
     }
 
     case 'rag_status': {
-      const kbs = store.listKbs()
+      const kbs = await store.listKbs()
       const total = kbs.reduce((s, k) => s + k.chunkCount, 0)
       const totalDocs = kbs.reduce((s, k) => s + k.docCount, 0)
       const lines = [

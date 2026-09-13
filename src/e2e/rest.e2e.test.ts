@@ -27,10 +27,10 @@ describe('REST API (real store + ingest + search)', () => {
     base = started.base
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     restoreFetch?.()
     server?.close()
-    store?.close()
+    await store?.close()
     if (root) rmSync(root, { recursive: true, force: true })
   })
 

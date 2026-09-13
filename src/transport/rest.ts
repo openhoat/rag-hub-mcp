@@ -125,14 +125,14 @@ export const createRestApp = async (store: Store) => {
     void reply.send({ status: 'ok', version: RAG_VERSION })
   })
 
-  app.get('/admin/kbs', (req, reply) => {
+  app.get('/admin/kbs', async (req, reply) => {
     if (!auth(req, reply)) return
-    void reply.send(store.listKbs())
+    void reply.send(await store.listKbs())
   })
 
-  app.get<{ Params: { kb: string } }>('/admin/kbs/:kb/documents', (req, reply) => {
+  app.get<{ Params: { kb: string } }>('/admin/kbs/:kb/documents', async (req, reply) => {
     if (!auth(req, reply)) return
-    void reply.send(store.listFiles(req.params.kb))
+    void reply.send(await store.listFiles(req.params.kb))
   })
 
   app.post<{ Params: { kb: string }; Body: AddBody }>('/admin/kbs/:kb/documents', async (req, reply) => {
@@ -164,9 +164,9 @@ export const createRestApp = async (store: Store) => {
     void reply.send(result)
   })
 
-  app.get('/admin/status', (req, reply) => {
+  app.get('/admin/status', async (req, reply) => {
     if (!auth(req, reply)) return
-    void reply.send({ kbs: store.listKbs() })
+    void reply.send({ kbs: await store.listKbs() })
   })
 
   app.get<{ Querystring: { query?: string; kb?: string; top_k?: string } }>('/search', searchLimiter, async (req, reply) => {

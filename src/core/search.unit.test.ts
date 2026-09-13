@@ -6,26 +6,15 @@ import { search } from './search.js'
 // Embeddings are served via a stubbed global fetch (OpenAI-compatible format).
 // embedTexts returns a single query vector, and cosineSimilarity runs for real.
 
-const makeStore = (chunks: ChunkRecord[], db: unknown = {}): Store => {
+const makeStore = (chunks: ChunkRecord[], searchFts?: (query: string) => Array<{ id: number; rank: number }> | null): Store => {
   return makeStubStore({
-    db: db as never,
-    getAllChunks(kb?: string | string[]): ChunkRecord[] {
+    async getAllChunks(kb?: string | string[]): Promise<ChunkRecord[]> {
       const names = kb ? (Array.isArray(kb) ? kb : [kb]) : null
       if (names) return chunks.filter(c => names.includes((JSON.parse(c.metadata) as { kb: string }).kb))
       return chunks
     },
+    searchFts: async (query: string) => (searchFts ? searchFts(query) : null),
   })
-}
-
-const makeFtsDb = (rowsByQuery: Record<string, Array<{ id: number; rank: number }>>): unknown => {
-  const prepare = (_sql: string) => ({
-    all: (matchQuery: string) => {
-      const words = matchQuery.match(/"([^"]+)"/g)?.map(w => w.replaceAll('"', '')) ?? []
-      const key = words.join(' AND ')
-      return rowsByQuery[key] ?? []
-    },
-  })
-  return { prepare }
 }
 
 let restoreFetch: () => void
@@ -40,9 +29,13 @@ afterEach(() => {
 
 describe('search', () => {
   test('should rank keyword matches via FTS and cap content', async () => {
+    const rowsByQuery: Record<string, Array<{ id: number; rank: number }>> = { 'quick AND fox': [{ id: 1, rank: -1 }] }
     const store = makeStore(
       [makeChunk(1, 'kb', 'the quick brown fox jumps over the lazy dog'), makeChunk(2, 'kb', 'a completely unrelated chunk')],
-      makeFtsDb({ 'quick AND fox': [{ id: 1, rank: -1 }] }),
+      matchQuery => {
+        const words = matchQuery.match(/"([^"]+)"/g)?.map(w => w.replaceAll('"', '')) ?? []
+        return rowsByQuery[words.join(' AND ')] ?? []
+      },
     )
     const results = await search(store, { query: 'quick fox', kb: 'kb', topK: 5 })
     expect(results.length).toBeGreaterThan(0)
@@ -106,8 +99,8 @@ describe('search', () => {
     expect(results.length).toBeLessThanOrEqual(2)
   })
 
-  test('should fall back to indexOf keyword matching when FTS db unavailable', async () => {
-    const store = makeStore([makeChunk(1, 'kb', 'the quick brown fox appears here')], {})
+  test('should fall back to indexOf keyword matching when FTS unavailable', async () => {
+    const store = makeStore([makeChunk(1, 'kb', 'the quick brown fox appears here')], () => null)
     const results = await search(store, { query: 'quick fox', kb: 'kb', topK: 5 })
     expect(results.length).toBeGreaterThan(0)
   })

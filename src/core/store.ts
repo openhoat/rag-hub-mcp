@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import type { ChunkRecord, DocInfo, FileRecord, KbInfo, Store } from '../types.js'
+import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../types.js'
 
 const migrate = (db: Database.Database): void => {
   db.exec(`
@@ -35,17 +35,17 @@ const migrate = (db: Database.Database): void => {
 }
 
 class StoreImpl implements Store {
-  db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db: Database.Database) {
     this.db = db
   }
 
-  close = (): void => {
+  close = async (): Promise<void> => {
     this.db.close()
   }
 
-  listKbs = (): KbInfo[] => {
+  listKbs = async (): Promise<KbInfo[]> => {
     const sql = `
       SELECT k.name AS name,
              COUNT(f.id) AS docCount,
@@ -61,7 +61,7 @@ class StoreImpl implements Store {
     return this.db.prepare(sql).all() as KbInfo[]
   }
 
-  listFiles = (kb: string): DocInfo[] => {
+  listFiles = async (kb: string): Promise<DocInfo[]> => {
     const sql = `
       SELECT f.rel_path AS relPath, f.sha256, f.mtime, f.bytes,
              COUNT(c.id) AS chunkCount
@@ -75,14 +75,14 @@ class StoreImpl implements Store {
     return this.db.prepare(sql).all(kb) as DocInfo[]
   }
 
-  getFile = (kbId: number, relPath: string): FileRecord | null => {
+  getFile = async (kbId: number, relPath: string): Promise<FileRecord | null> => {
     const row = this.db
       .prepare('SELECT id, kb_id AS kbId, rel_path AS relPath, sha256, mtime, bytes FROM files WHERE kb_id = ? AND rel_path = ?')
       .get(kbId, relPath) as FileRecord | undefined
     return row ?? null
   }
 
-  upsertFile = (rec: FileRecord): number => {
+  upsertFile = async (rec: FileRecord): Promise<number> => {
     const existing = this.db.prepare('SELECT id FROM files WHERE kb_id = ? AND rel_path = ?').get(rec.kbId, rec.relPath) as
       | { id: number }
       | undefined
@@ -96,28 +96,28 @@ class StoreImpl implements Store {
     return r.lastInsertRowid as number
   }
 
-  deleteFile = (id: number): void => {
+  deleteFile = async (id: number): Promise<void> => {
     this.db.prepare('DELETE FROM files WHERE id = ?').run(id)
   }
 
-  deleteFilesByKb = (kbId: number): void => {
+  deleteFilesByKb = async (kbId: number): Promise<void> => {
     this.db.prepare('DELETE FROM files WHERE kb_id = ?').run(kbId)
   }
 
-  getKbId = (kbName: string): number => {
+  getKbId = async (kbName: string): Promise<number> => {
     const row = this.db.prepare('SELECT id FROM kbs WHERE name = ?').get(kbName) as { id: number } | undefined
     return row?.id ?? 0
   }
 
-  addKb = (name: string): void => {
+  addKb = async (name: string): Promise<void> => {
     this.db.prepare('INSERT OR IGNORE INTO kbs (name) VALUES (?)').run(name)
   }
 
-  removeKb = (name: string): void => {
+  removeKb = async (name: string): Promise<void> => {
     this.db.prepare('DELETE FROM kbs WHERE name = ?').run(name)
   }
 
-  purgeKb = (kbId: number): void => {
+  purgeKb = async (kbId: number): Promise<void> => {
     const chunkIds = this.db.prepare('SELECT id FROM chunks WHERE file_id IN (SELECT id FROM files WHERE kb_id = ?)').all(kbId) as {
       id: number
     }[]
@@ -128,7 +128,7 @@ class StoreImpl implements Store {
     this.db.prepare('DELETE FROM files WHERE kb_id = ?').run(kbId)
   }
 
-  insertChunk = (rec: Omit<ChunkRecord, 'id'>): number => {
+  insertChunk = async (rec: Omit<ChunkRecord, 'id'>): Promise<number> => {
     // Idempotency: purge any pre-existing chunks for this file/chunk_index before insert
     this.db
       .prepare('DELETE FROM fts_chunks WHERE rowid IN (SELECT id FROM chunks WHERE file_id = ? AND chunk_index = ?)')
@@ -142,7 +142,7 @@ class StoreImpl implements Store {
     return chunkId
   }
 
-  deleteChunks = (fileId: number): void => {
+  deleteChunks = async (fileId: number): Promise<void> => {
     const ids = this.db.prepare('SELECT id FROM chunks WHERE file_id = ?').all(fileId) as { id: number }[]
     for (const row of ids) {
       this.db.prepare('DELETE FROM fts_chunks WHERE rowid = ?').run(row.id)
@@ -150,10 +150,14 @@ class StoreImpl implements Store {
     this.db.prepare('DELETE FROM chunks WHERE file_id = ?').run(fileId)
   }
 
-  getAllChunks = (kb?: string | string[]): ChunkRecord[] => {
+  getAllChunks = async (kb?: string | string[]): Promise<ChunkRecord[]> => {
     if (!kb) return this.db.prepare('SELECT * FROM chunks').all() as ChunkRecord[]
     const names = Array.isArray(kb) ? kb : [kb]
-    const kbIds = names.map(name => this.getKbId(name)).filter(id => id !== 0)
+    const kbIds: number[] = []
+    for (const name of names) {
+      const id = await this.getKbId(name)
+      if (id !== 0) kbIds.push(id)
+    }
     if (kbIds.length === 0) return []
     const placeholders = kbIds.map(() => '?').join(', ')
     return this.db
@@ -163,6 +167,38 @@ class StoreImpl implements Store {
         WHERE f.kb_id IN (${placeholders})
       `)
       .all(...kbIds) as ChunkRecord[]
+  }
+
+  updateFileMtime = async (id: number, mtime: number): Promise<void> => {
+    this.db.prepare('UPDATE files SET mtime = ? WHERE id = ?').run(mtime, id)
+  }
+
+  listAllKbs = async (): Promise<{ id: number; name: string }[]> => {
+    return this.db.prepare('SELECT id, name FROM kbs').all() as { id: number; name: string }[]
+  }
+
+  getKbName = async (kbId: number): Promise<string> => {
+    const row = this.db.prepare('SELECT name FROM kbs WHERE id = ?').get(kbId) as { name: string } | undefined
+    return row?.name ?? '?'
+  }
+
+  listKnownFiles = async (): Promise<KnownFileRow[]> => {
+    const rows = this.db
+      .prepare(`
+        SELECT f.id, f.rel_path AS relPath, f.sha256, f.mtime, f.bytes, k.name AS kbName
+        FROM files f JOIN kbs k ON f.kb_id = k.id
+      `)
+      .all() as unknown as KnownFileRow[]
+    return rows
+  }
+
+  searchFts = async (matchQuery: string): Promise<FtsRow[] | null> => {
+    try {
+      const rows = this.db.prepare('SELECT rowid AS id, rank FROM fts_chunks WHERE fts_chunks MATCH ?').all(matchQuery) as FtsRow[]
+      return rows
+    } catch {
+      return null
+    }
   }
 }
 

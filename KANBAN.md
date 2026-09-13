@@ -14,6 +14,11 @@
 
 - [ ] Implementation
 
+### #9 [ARCHITECTURE] Make Store interface async + introduce PostgreSQL backend (P2)
+
+- [ ] Phase 1: make Store async, encapsulate store.db, fix SIGABRT
+- [x] Audit impact & choose direction (PostgreSQL + pgvector pluggable)
+
 ## In Progress
 
 

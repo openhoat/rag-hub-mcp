@@ -23,12 +23,12 @@ export default defineConfig({
           ...shared,
           name: 'e2e',
           include: ['src/e2e/**/*.e2e.test.ts'],
-          // Forks (child processes) + a single worker keeps the native
-          // better-sqlite3 addon in one clean process for the whole suite.
-          // Parallel worker teardown races the N-API cleanup hooks on process
-          // exit (RemoveEnvironmentCleanupHook SIGABRT). Per-file isolation
+          // Threads + a single worker keeps the native better-sqlite3 addon in
+          // one clean worker for the whole suite. Fork teardown races the
+          // N-API cleanup hooks during worker process exit
+          // (RemoveEnvironmentCleanupHook SIGABRT). Per-file isolation
           // (isolate: true, default) stops module state leaking between files.
-          pool: 'forks',
+          pool: 'threads',
           maxWorkers: 1,
           fileParallelism: false,
         },

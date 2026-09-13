@@ -33,13 +33,13 @@ export const scanAll = async (store: Store, root: string = KB_ROOT): Promise<Ing
 
   const kbDirs = listKbDirs(root)
   for (const name of kbDirs) {
-    store.addKb(name)
+    await store.addKb(name)
   }
 
-  const knownFiles = loadKnownFiles(store)
+  const knownFiles = await loadKnownFiles(store)
 
   for (const kbName of kbDirs) {
-    const kbId = store.getKbId(kbName)
+    const kbId = await store.getKbId(kbName)
     if (kbId) await scanKb(store, kbId, kbName, root, knownFiles, result)
   }
 
@@ -83,18 +83,18 @@ const scanKb = async (
 
     const sha256 = hashFile(fullPath)
     if (isSameHash(known, sha256)) {
-      store.db.prepare('UPDATE files SET mtime = ? WHERE id = ?').run(Math.floor(st.mtimeMs), knownId)
+      await store.updateFileMtime(knownId as number, Math.floor(st.mtimeMs))
       knownFiles.delete(knownKey)
       result.skipped++
       continue
     }
 
     if (knownId) {
-      store.deleteChunks(knownId)
-      store.deleteFile(knownId)
+      await store.deleteChunks(knownId)
+      await store.deleteFile(knownId)
       result.modified++
     } else {
-      purgeStaleFile(store, kbId, entry)
+      await purgeStaleFile(store, kbId, entry)
       result.added++
     }
 
@@ -119,28 +119,28 @@ const isSameHash = (known: KnownFile | undefined, sha256: string): known is Know
   return known?.sha256 === sha256 && Boolean(known?.id)
 }
 
-const purgeStaleFile = (store: Store, kbId: number, entry: string) => {
-  const existingId = store.getFile(kbId, entry)?.id
-  if (existingId) {
-    store.deleteChunks(existingId)
-    store.deleteFile(existingId)
+const purgeStaleFile = async (store: Store, kbId: number, entry: string) => {
+  const existing = await store.getFile(kbId, entry)
+  if (existing?.id) {
+    await store.deleteChunks(existing.id)
+    await store.deleteFile(existing.id)
   }
 }
 
 const cleanupStale = async (store: Store, kbDirs: string[], knownFiles: Map<string, KnownFile>, result: IngestResult) => {
   for (const rec of knownFiles.values()) {
     if (rec.id) {
-      store.deleteChunks(rec.id)
-      store.deleteFile(rec.id)
+      await store.deleteChunks(rec.id)
+      await store.deleteFile(rec.id)
       result.deleted++
     }
   }
 
-  const staleKbs = store.db.prepare('SELECT id, name FROM kbs').all() as { id: number; name: string }[]
+  const staleKbs = await store.listAllKbs()
   for (const kb of staleKbs) {
     if (!kbDirs.includes(kb.name)) {
-      store.deleteFilesByKb(kb.id)
-      store.removeKb(kb.name)
+      await store.deleteFilesByKb(kb.id)
+      await store.removeKb(kb.name)
     }
   }
 }
@@ -156,7 +156,7 @@ export const indexFile = async (
   const { text, frontmatter } = await extractText(fullPath)
   if (!text) return
 
-  const fileId = store.upsertFile({
+  const fileId = await store.upsertFile({
     kbId,
     relPath,
     sha256,
@@ -164,7 +164,7 @@ export const indexFile = async (
     bytes: st.size,
   })
 
-  const kbName = (store.db.prepare('SELECT name FROM kbs WHERE id = ?').get(kbId) as { name: string } | undefined)?.name || '?'
+  const kbName = await store.getKbName(kbId)
   const chunks = chunkText(text, relPath, kbName, frontmatter)
   if (chunks.length === 0) return
 
@@ -180,7 +180,7 @@ export const indexFile = async (
     const c = chunks[i]
     const emb = embeddings[i]
     const embBuf = emb ? Buffer.from(emb.buffer) : null
-    store.insertChunk({ fileId, chunkIndex: i, content: c.content, metadata: c.metadata, embedding: embBuf })
+    await store.insertChunk({ fileId, chunkIndex: i, content: c.content, metadata: c.metadata, embedding: embBuf })
   }
 }
 
@@ -197,12 +197,12 @@ export const deleteDocument = async (store: Store, kb: string, relPath: string, 
   const fullPath = sanitizeRelativePath(root, kb, relPath)
   if (existsSync(fullPath)) unlinkSync(fullPath)
 
-  const kbId = store.getKbId(kb)
+  const kbId = await store.getKbId(kb)
   if (!kbId) return
-  const file = store.getFile(kbId, relPath)
+  const file = await store.getFile(kbId, relPath)
   if (file?.id) {
-    store.deleteChunks(file.id)
-    store.deleteFile(file.id)
+    await store.deleteChunks(file.id)
+    await store.deleteFile(file.id)
   }
 }
 
@@ -211,9 +211,9 @@ export const deleteKb = async (store: Store, kb: string, root: string = KB_ROOT)
   const normalized = relative(root, kbDir)
   if (normalized === '' || normalized.startsWith('..')) throw new Error('invalid path')
   if (existsSync(kbDir)) rmSync(kbDir, { recursive: true, force: true })
-  const kbId = store.getKbId(kb)
+  const kbId = await store.getKbId(kb)
   if (kbId) {
-    store.removeKb(kb)
+    await store.removeKb(kb)
   }
 }
 
@@ -229,16 +229,11 @@ export const readDocument = async (
   return { content: text, frontmatter }
 }
 
-const loadKnownFiles = (store: Store): Map<string, KnownFile> => {
+const loadKnownFiles = async (store: Store): Promise<Map<string, KnownFile>> => {
   const map = new Map<string, KnownFile>()
-  const rows = store.db
-    .prepare(`
-    SELECT f.id, f.rel_path, f.sha256, f.mtime, f.bytes, k.name AS kb_name
-    FROM files f JOIN kbs k ON f.kb_id = k.id
-  `)
-    .all() as unknown as { id: number; rel_path: string; sha256: string; mtime: number; bytes: number; kb_name: string }[]
+  const rows = await store.listKnownFiles()
   for (const r of rows) {
-    map.set(`${r.kb_name}/${r.rel_path}`, { id: r.id, mtime: r.mtime, bytes: r.bytes, sha256: r.sha256 })
+    map.set(`${r.kbName}/${r.relPath}`, { id: r.id, mtime: r.mtime, bytes: r.bytes, sha256: r.sha256 })
   }
   return map
 }

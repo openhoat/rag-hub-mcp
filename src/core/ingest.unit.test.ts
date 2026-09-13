@@ -29,10 +29,10 @@ const setupKb = (): { root: string; store: Store } => {
   return { root: kbRoot, store: s }
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.clearAllMocks()
   if (root) rmSync(root, { recursive: true, force: true })
-  if (store) store.close()
+  if (store) await store.close()
 })
 
 describe('scanAll', () => {
@@ -43,7 +43,7 @@ describe('scanAll', () => {
     writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
     const result = await scanAll(store, root)
     expect(result.added).toBe(1)
-    const kbs = store.listKbs()
+    const kbs = await store.listKbs()
     expect(kbs).toHaveLength(1)
     expect(kbs[0].name).toBe('docs')
     expect(kbs[0].docCount).toBe(1)
@@ -88,7 +88,7 @@ describe('addDocument', () => {
     root = setup.root
     store = setup.store
     await addDocument(store, 'docs', 'notes/new.md', '# new', root)
-    const kbs = store.listKbs()
+    const kbs = await store.listKbs()
     expect(kbs.find(k => k.name === 'docs')?.docCount).toBe(1)
   })
 
@@ -109,7 +109,7 @@ describe('deleteDocument', () => {
     writeFileSync(join(root, 'docs', 'a.md'), 'x', 'utf-8')
     await scanAll(store, root)
     await deleteDocument(store, 'docs', 'a.md', root)
-    expect(store.listFiles('docs')).toHaveLength(0)
+    expect(await store.listFiles('docs')).toHaveLength(0)
   })
 
   test('should reject traversal paths', async () => {
@@ -154,7 +154,7 @@ describe('deleteKb', () => {
     writeFileSync(join(root, 'docs', 'a.md'), 'x', 'utf-8')
     await scanAll(store, root)
     await deleteKb(store, 'docs', root)
-    expect(store.listKbs()).toHaveLength(0)
+    expect(await store.listKbs()).toHaveLength(0)
   })
 
   test('should handle a kb that does not exist', async () => {
@@ -162,6 +162,6 @@ describe('deleteKb', () => {
     root = setup.root
     store = setup.store
     await deleteKb(store, 'missing', root)
-    expect(store.listKbs()).toHaveLength(0)
+    expect(await store.listKbs()).toHaveLength(0)
   })
 })
