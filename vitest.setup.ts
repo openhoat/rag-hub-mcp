@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 process.env.MCP_API_KEY = process.env.MCP_API_KEY || 'test-secret-key'
 process.env.VERSION = process.env.VERSION || 'test-version'
+process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent'
 
 // A single real temp dir shared by the whole run. `ingest.ts` reads KB_ROOT at
 // module load, so it must be stable before any test module is imported.
