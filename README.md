@@ -19,7 +19,7 @@ Most RAG setups need a vector database, a chunking pipeline, an embeddings servi
 
 - **Folders are knowledge bases** — a 1st-level folder is a KB, named after the folder. No schema, no UI.
 - **Zero infrastructure** — one SQLite database with FTS5 by default. No vector DB, no server to keep running. (Optional PostgreSQL + pgvector backend for server-side deployments.)
-- **MCP-native** — 8 tools over the Model Context Protocol, so any agent can use it in seconds.
+- **MCP-native** — 9 tools over the Model Context Protocol, so any agent can use it in seconds.
 - **Hybrid search** — vector cosine similarity fused with full-text keyword search (SQLite FTS5 or PostgreSQL `ts_rank`).
 
 ## How it works
@@ -90,7 +90,7 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 
 ## MCP tools & REST API
 
-**8 tools over MCP**, callable from any MCP-compatible agent:
+**9 tools over MCP**, callable from any MCP-compatible agent:
 
 | Tool | Description |
 |---|---|
@@ -98,6 +98,7 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 | `rag_list_documents` | List documents in a KB |
 | `rag_search` | Hybrid search (`kb` optional) |
 | `rag_add_document` | Add a text document |
+| `rag_read` | Retrieve full extracted content of a document |
 | `rag_delete_document` | Delete a document |
 | `rag_delete_kb` | Delete an entire KB |
 | `rag_reindex` | Trigger an immediate scan |

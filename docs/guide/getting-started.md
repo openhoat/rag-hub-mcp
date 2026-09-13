@@ -71,7 +71,7 @@ docker build -t rag-hub-mcp .
 ## Next steps
 
 - [Architecture](architecture) — how indexing and search work.
-- [MCP Tools](mcp-tools) — the 8 tools your agents get.
+- [MCP Tools](mcp-tools) — the 9 tools your agents get.
 - [REST API](rest-api) — the `/search` and `/admin/*` endpoints.
 - [Configuration](configuration) — environment variables and embedding models.
 - [Integrations](integrations) — wire up opencode, Claude Code, Cline, dsh.

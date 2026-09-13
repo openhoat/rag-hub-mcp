@@ -25,7 +25,7 @@ All configuration is done through environment variables. Variables are validated
 | `PG_SSL` | `false` | Enable TLS for the Postgres connection. |
 | `CORS_ORIGINS` | _(none)_ | Allowed CORS origins (comma-separated). Empty = disables the CORS restriction. |
 | `RAG_TRANSPORT` | `stdio` | `stdio` or `http`. The `--http` flag wins. |
-| `VERSION` | `0.0.1` | Reported version. |
+| `VERSION` | `1.0.0` | Reported version. |
 
 ## Recommended embedding models
 

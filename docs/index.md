@@ -20,7 +20,7 @@ features:
   - title: Folders are knowledge bases
     details: 1st-level folder = 1 KB, named after the folder. Drop documents, let indexing pick them up.
   - title: MCP-native
-    details: 8 tools over the Model Context Protocol. Works with opencode, Claude Code, Cline and more.
+    details: 9 tools over the Model Context Protocol. Works with opencode, Claude Code, Cline and more.
   - title: Hybrid search
     details: Vector cosine similarity fused with SQLite FTS5 keyword search, weighted and scored per chunk.
   - title: Multi-format
