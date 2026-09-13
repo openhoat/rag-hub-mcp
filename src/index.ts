@@ -139,8 +139,11 @@ const main = async (): Promise<void> => {
 
   await registerMcpEndpoints(app, sessions, store, { createRateLimit: MCP_SESSION_CREATE_RATE_PER_MINUTE })
 
-  // Start server
-  await app.listen({ port: Number(PORT) })
+  // Start server. Bind to 0.0.0.0 so reverse proxies/traefik can reach the
+  // container via its network IP — Fastify's default 'localhost' host binds
+  // only the loopback interface, which the in-container healthcheck passes
+  // while external routing returns 502.
+  await app.listen({ port: Number(PORT), host: '0.0.0.0' })
   logger.info(`server listening on port ${PORT}`)
   logger.info(`REST: http://localhost:${PORT}/health`)
   logger.info(`MCP (streamable-http): http://localhost:${PORT}/mcp`)
