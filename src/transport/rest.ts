@@ -31,6 +31,75 @@ const addBodySchema = z.object({
 
 type AddBody = z.infer<typeof addBodySchema>
 
+const handleAddDocument = async (
+  store: Store,
+  req: FastifyRequest<{ Params: { kb: string }; Body: AddBody }>,
+  reply: FastifyReply,
+): Promise<void> => {
+  const { kb } = req.params
+  const parsed = addBodySchema.safeParse(req.body)
+  if (!parsed.success) {
+    void reply.code(400).send({ error: 'path and content must be strings' })
+    return
+  }
+  const { path: relPath, content } = parsed.data
+  try {
+    await addDocument(store, kb, relPath, content)
+  } catch (err) {
+    if (err instanceof Error && err.message === 'invalid path') {
+      void reply.code(400).send({ error: 'invalid path' })
+      return
+    }
+    throw err
+  }
+  void reply.send({ status: 'added', kb, path: relPath })
+}
+
+const handleGetDocument = async (
+  req: FastifyRequest<{ Querystring: { kb: string; path: string } }>,
+  reply: FastifyReply,
+): Promise<void> => {
+  const { kb, path } = req.query
+  if (!kb || !path) {
+    void reply.code(400).send({ error: 'kb and path required' })
+    return
+  }
+  try {
+    const doc = await readDocument(decodeURIComponent(kb), decodeURIComponent(path))
+    if (doc === null) {
+      void reply.code(404).send({ error: 'document not found' })
+      return
+    }
+    void reply.send({ kb, path, content: doc.content, frontmatter: doc.frontmatter })
+  } catch (err) {
+    if (err instanceof Error && err.message === 'invalid path') {
+      void reply.code(400).send({ error: 'invalid path' })
+      return
+    }
+    throw err
+  }
+}
+
+const handleSearch = async (
+  store: Store,
+  req: FastifyRequest<{ Querystring: { query?: string; kb?: string; top_k?: string } }>,
+  reply: FastifyReply,
+): Promise<void> => {
+  const { query, kb, top_k } = req.query
+  if (!query) {
+    void reply.code(400).send({ error: 'query required' })
+    return
+  }
+  const kbList = kb
+    ? kb
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+    : undefined
+  const results = await search(store, { query, kb: kbList, topK: top_k ? Number.parseInt(top_k, 10) : 10 })
+  void reply.send({ results })
+}
+
 export const createRestApp = async (store: Store) => {
   const app = fastify({ bodyLimit: 10 * 1024 * 1024 })
 
@@ -68,23 +137,7 @@ export const createRestApp = async (store: Store) => {
 
   app.post<{ Params: { kb: string }; Body: AddBody }>('/admin/kbs/:kb/documents', async (req, reply) => {
     if (!auth(req, reply)) return
-    const { kb } = req.params
-    const parsed = addBodySchema.safeParse(req.body)
-    if (!parsed.success) {
-      void reply.code(400).send({ error: 'path and content must be strings' })
-      return
-    }
-    const { path: relPath, content } = parsed.data
-    try {
-      await addDocument(store, kb, relPath, content)
-    } catch (err) {
-      if (err instanceof Error && err.message === 'invalid path') {
-        void reply.code(400).send({ error: 'invalid path' })
-        return
-      }
-      throw err
-    }
-    void reply.send({ status: 'added', kb, path: relPath })
+    await handleAddDocument(store, req, reply)
   })
 
   app.delete<{ Params: { kb: string; '*': string } }>('/admin/kbs/:kb/documents/*', async (req, reply) => {
@@ -102,25 +155,7 @@ export const createRestApp = async (store: Store) => {
 
   app.get<{ Querystring: { kb: string; path: string } }>('/document', async (req, reply) => {
     if (!auth(req, reply)) return
-    const { kb, path } = req.query
-    if (!kb || !path) {
-      void reply.code(400).send({ error: 'kb and path required' })
-      return
-    }
-    try {
-      const doc = await readDocument(decodeURIComponent(kb), decodeURIComponent(path))
-      if (doc === null) {
-        void reply.code(404).send({ error: 'document not found' })
-        return
-      }
-      void reply.send({ kb, path, content: doc.content, frontmatter: doc.frontmatter })
-    } catch (err) {
-      if (err instanceof Error && err.message === 'invalid path') {
-        void reply.code(400).send({ error: 'invalid path' })
-        return
-      }
-      throw err
-    }
+    await handleGetDocument(req, reply)
   })
 
   app.post('/admin/reindex', reindexLimiter, async (_req, reply) => {
@@ -136,23 +171,7 @@ export const createRestApp = async (store: Store) => {
 
   app.get<{ Querystring: { query?: string; kb?: string; top_k?: string } }>('/search', searchLimiter, async (req, reply) => {
     if (!auth(req, reply)) return
-    const { query, kb, top_k } = req.query
-    if (!query) {
-      void reply.code(400).send({ error: 'query required' })
-      return
-    }
-    const kbList = kb
-      ? kb
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean)
-      : undefined
-    const results = await search(store, {
-      query,
-      kb: kbList,
-      topK: top_k ? Number.parseInt(top_k, 10) : 10,
-    })
-    void reply.send({ results })
+    await handleSearch(store, req, reply)
   })
 
   app.setErrorHandler((err, _req, reply) => {

@@ -11,7 +11,7 @@ interface Paragraph {
 const MAX_CHARS = 3200
 const OVERLAP_CHARS = 400
 
-export const chunkText = (text: string, relPath: string, kb: string, frontmatter?: Record<string, string> | null): Chunk[] => {
+export const chunkText = (text: string, relPath: string, kb: string, frontmatter: Record<string, string> | null = null): Chunk[] => {
   const paragraphs = splitParagraphs(text)
   const chunks: { content: string; metadata: string }[] = []
   let buffer: Paragraph[] = []
@@ -46,7 +46,7 @@ const metadataJson = (
   kb: string,
   relPath: string,
   headings: string,
-  frontmatter: Record<string, string> | null | undefined,
+  frontmatter: Record<string, string> | null,
   chunkIndex: number,
   total: number,
 ): string => {

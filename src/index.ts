@@ -3,6 +3,7 @@ import rateLimit from '@fastify/rate-limit'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { env, isHttpMode, requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
 import { SessionRegistry } from './core/sessionRegistry.js'
@@ -13,6 +14,63 @@ import { createRestApp } from './transport/rest.js'
 import type { Store } from './types.js'
 
 const logger = getLogger('main')
+
+type McpSession = { server: McpServer; transport: StreamableHTTPServerTransport }
+
+const requestAuthenticated = (authHeader: string | undefined): boolean => {
+  const key = env.MCP_API_KEY
+  return !key || authHeader === `Bearer ${key}`
+}
+
+const closeSession = (sessions: SessionRegistry<McpSession>, sessionId: string): void => {
+  const entry = sessions.get(sessionId)
+  if (!entry) return
+  sessions.delete(sessionId)
+  entry.value.transport.close().catch(() => {})
+  logger.info(`MCP session closed: ${sessionId}`)
+}
+
+const handleExistingSession = async (
+  sessions: SessionRegistry<McpSession>,
+  sessionId: string,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> => {
+  const entry = sessions.get(sessionId)
+  if (!entry) {
+    reply.raw.statusCode = 404
+    reply.raw.end(JSON.stringify({ error: 'unknown session' }))
+    return
+  }
+  sessions.touch(sessionId)
+  await entry.value.transport.handleRequest(request.raw, reply.raw, request.body)
+}
+
+const handleNewSession = async (
+  sessions: SessionRegistry<McpSession>,
+  store: Store,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> => {
+  try {
+    const server = createMcpServer(store)
+    const transport = createStreamableHttpTransport({
+      onSessionInitialized: id => {
+        sessions.set(id, { server, transport })
+        logger.info(`MCP session started: ${id}`)
+      },
+      onSessionClosed: sessionId => closeSession(sessions, sessionId),
+    })
+    await server.connect(transport)
+    await transport.handleRequest(request.raw, reply.raw, request.body)
+  } catch (err) {
+    logger.error('MCP streamable-http error', err instanceof Error ? err.stack : String(err))
+    if (!reply.raw.writableEnded) {
+      reply.raw.statusCode = 500
+      reply.raw.end(JSON.stringify({ error: 'mcp error' }))
+    }
+  }
+}
 
 const main = async (): Promise<void> => {
   const PORT = env.PORT
@@ -78,79 +136,48 @@ const main = async (): Promise<void> => {
   // MCP sessions: one McpServer + transport per client session (keyed by Mcp-Session-Id).
   // Registry enforces a max concurrent size and an idle TTL, purging orphaned
   // sessions when a client disconnects without a closing POST /mcp.
-  const sessions = new SessionRegistry<{ server: McpServer; transport: StreamableHTTPServerTransport }>(
-    MCP_SESSION_MAX,
-    MCP_SESSION_TTL_SECONDS * 1000,
-  )
+  const sessions = new SessionRegistry<McpSession>(MCP_SESSION_MAX, MCP_SESSION_TTL_SECONDS * 1000)
 
-  const closeSession = (sessionId: string) => {
-    const entry = sessions.get(sessionId)
-    if (!entry) return
-    sessions.delete(sessionId)
-    entry.value.transport.close().catch(() => {})
-    logger.info(`MCP session closed: ${sessionId}`)
-  }
+  await registerMcpEndpoints(app, sessions, store, { createRateLimit: MCP_SESSION_CREATE_RATE_PER_MINUTE })
 
+  // Start server
+  await app.listen({ port: Number(PORT) })
+  logger.info(`server listening on port ${PORT}`)
+  logger.info(`REST: http://localhost:${PORT}/health`)
+  logger.info(`MCP (streamable-http): http://localhost:${PORT}/mcp`)
+
+  registerShutdown(store)
+}
+
+const registerMcpEndpoints = async (
+  app: FastifyInstance,
+  sessions: SessionRegistry<McpSession>,
+  store: Store,
+  opts: { createRateLimit: number },
+): Promise<void> => {
   // Rate-limit MCP session *creation* (POST /mcp without a Mcp-Session-Id).
   // Established sessions are unaffected so active clients never hit the cap.
   // `global` limits only this route via the `onRoute` config hook; the plugin
   // provides the `rateLimit` instance for it.
-  await app.register(rateLimit, { global: false, max: MCP_SESSION_CREATE_RATE_PER_MINUTE, timeWindow: 60_000 })
+  await app.register(rateLimit, { global: false, max: opts.createRateLimit, timeWindow: 60_000 })
 
-  app.post('/mcp', { config: { rateLimit: { max: MCP_SESSION_CREATE_RATE_PER_MINUTE, timeWindow: 60_000 } } }, async (request, reply) => {
-    if (MCP_API_KEY) {
-      const auth = request.headers.authorization
-      if (auth !== `Bearer ${MCP_API_KEY}`) {
-        void reply.code(401).send({ error: 'unauthorized' })
-        return
-      }
+  app.post('/mcp', { config: { rateLimit: { max: opts.createRateLimit, timeWindow: 60_000 } } }, async (request, reply) => {
+    if (!requestAuthenticated(request.headers.authorization)) {
+      void reply.code(401).send({ error: 'unauthorized' })
+      return
     }
     const sessionId = request.headers['mcp-session-id'] as string | undefined
-    try {
-      // The SDK writes directly to the Node.js raw response (SSE + JSON-RPC).
-      // Take over the reply lifecycle before handing off the raw objects.
-      reply.hijack()
-      if (sessionId) {
-        // Existing session: refresh its TTL and route to its dedicated transport.
-        const entry = sessions.get(sessionId)
-        if (entry) {
-          sessions.touch(sessionId)
-          await entry.value.transport.handleRequest(request.raw, reply.raw, request.body)
-          return
-        }
-        reply.raw.statusCode = 404
-        reply.raw.end(JSON.stringify({ error: 'unknown session' }))
-        return
-      }
-
-      // Reject new sessions when the in-memory cap is reached instead of
-      // silently evicting an active client (which would break an in-flight
-      // RAG call). 503 signals the client to retry later.
-      if (!sessions.hasCapacity()) {
-        reply.raw.statusCode = 503
-        reply.raw.end(JSON.stringify({ error: 'too many MCP sessions' }))
-        return
-      }
-
-      // New session: create a dedicated transport + server, then handle the request.
-      // onsessioninitialized fires during handleRequest once the SDK allocates the id.
-      const server = createMcpServer(store)
-      const transport = createStreamableHttpTransport({
-        onSessionInitialized: id => {
-          sessions.set(id, { server, transport })
-          logger.info(`MCP session started: ${id}`)
-        },
-        onSessionClosed: closeSession,
-      })
-      await server.connect(transport)
-      await transport.handleRequest(request.raw, reply.raw, request.body)
-    } catch (err) {
-      logger.error('MCP streamable-http error', err instanceof Error ? err.stack : String(err))
-      if (!reply.raw.writableEnded) {
-        reply.raw.statusCode = 500
-        reply.raw.end(JSON.stringify({ error: 'mcp error' }))
-      }
+    reply.hijack()
+    if (sessionId) {
+      await handleExistingSession(sessions, sessionId, request, reply)
+      return
     }
+    if (!sessions.hasCapacity()) {
+      reply.raw.statusCode = 503
+      reply.raw.end(JSON.stringify({ error: 'too many MCP sessions' }))
+      return
+    }
+    await handleNewSession(sessions, store, request, reply)
   })
 
   // List tools endpoint (for MCP inspector)
@@ -176,17 +203,9 @@ const main = async (): Promise<void> => {
   // POST /mcp cannot leak memory indefinitely.
   setInterval(() => {
     const expired = sessions.purgeExpired()
-    for (const id of expired) closeSession(id)
+    for (const id of expired) closeSession(sessions, id)
     if (expired.length > 0) logger.info(`evicted ${expired.length} stale MCP session(s)`)
   }, 60_000).unref()
-
-  // Start server
-  await app.listen({ port: Number(PORT) })
-  logger.info(`server listening on port ${PORT}`)
-  logger.info(`REST: http://localhost:${PORT}/health`)
-  logger.info(`MCP (streamable-http): http://localhost:${PORT}/mcp`)
-
-  registerShutdown(store)
 }
 
 const registerShutdown = (store: Store): void => {
