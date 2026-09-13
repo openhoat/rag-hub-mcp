@@ -92,29 +92,34 @@ export const normalizeTsRank = (rank: number): number => {
   return Math.min(1, Math.max(0, rank / (1 + rank)))
 }
 
+type NumLike = number | string
+type RowMeta = string | Record<string, unknown> | null
+type RowEmbedding = string | Buffer | null
+type NumInput = NumLike | undefined | null
+
 interface PgRow {
-  id: number | string
-  kbId?: number | string
+  id: NumLike
+  kbId?: NumLike
   relPath?: string
   sha256?: string
-  mtime?: number | string
-  bytes?: number | string
-  chunkIndex?: number | string
+  mtime?: NumLike
+  bytes?: NumLike
+  chunkIndex?: NumLike
   content?: string
-  metadata?: string | Record<string, unknown> | null
-  embedding?: string | Buffer | null
-  fileId?: number | string
+  metadata?: RowMeta
+  embedding?: RowEmbedding
+  fileId?: NumLike
   kbName?: string
   name?: string
-  docCount?: number | string
-  chunkCount?: number | string
-  totalBytes?: number | string
-  rank?: number | string
+  docCount?: NumLike
+  chunkCount?: NumLike
+  totalBytes?: NumLike
+  rank?: NumLike
   [key: string]: unknown
 }
 
 /** Coerce a pg numeric value (string | number) into a JS number. */
-const toNum = (v: number | string | undefined | null): number => (v === undefined || v === null ? 0 : Number(v))
+const toNum = (v: NumInput): number => (v === undefined || v === null ? 0 : Number(v))
 
 /** Adapt a `pg.Pool` to the Db interface used by PgStore. */
 export const poolToDb = (pool: Pool): Db => ({
@@ -159,7 +164,7 @@ const splitStatements = (sql: string): string[] => {
   let inQuote = false
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i]
-    if (ch === "'" && sql[i - 1] !== '\\') inQuote = !inQuote
+    inQuote = toggleQuote(ch, sql[i - 1], inQuote)
     if (ch === ';' && !inQuote) {
       if (current.trim()) statements.push(current.trim())
       current = ''
@@ -171,13 +176,18 @@ const splitStatements = (sql: string): string[] => {
   return statements
 }
 
+/** Toggle the quote state when a non-escaped single quote is encountered. */
+const toggleQuote = (ch: string, prev: string | undefined, inQuote: boolean): boolean => {
+  return ch === "'" && prev !== '\\' ? !inQuote : inQuote
+}
+
 export class PgStore implements Store {
   constructor(
     private readonly db: Db,
     private readonly dimension: number = env.EMBEDDINGS_DIMENSION,
   ) {}
 
-  private query = async <TResult extends Record<string, unknown> = PgRow>(
+  private readonly query = async <TResult extends Record<string, unknown> = PgRow>(
     sql: string,
     params: unknown[] = [],
   ): Promise<{ rows: TResult[] }> => {
