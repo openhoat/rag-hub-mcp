@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
+import { env } from '../config.js'
 import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import type { Store } from '../types.js'
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
 
-const RAG_VERSION = process.env.RAG_VERSION || '0.0.1'
+const RAG_VERSION = env.RAG_VERSION
 
 const kbArgs = { kb: z.string().describe('Knowledge base name') }
 const searchArgs = {

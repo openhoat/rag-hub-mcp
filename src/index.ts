@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import './preload.js'
 import rateLimit from '@fastify/rate-limit'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { requireHttpApiKey } from './config.js'
+import { env, isHttpMode, requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
 import { SessionRegistry } from './core/sessionRegistry.js'
 import { createStore } from './core/store.js'
@@ -15,32 +14,28 @@ import type { Store } from './types.js'
 
 const logger = getLogger('main')
 
-// Default transport is **stdio** (local MCP agents). Use `--http` (or
-// RAG_TRANSPORT=http) to run the HTTP server (REST API + streamable-http MCP).
-const isHttp = process.argv.includes('--http') || process.env.RAG_TRANSPORT === 'http'
-
 const main = async (): Promise<void> => {
-  const PORT = process.env.PORT || '8000'
-  const DB_PATH = process.env.DB_PATH || (isHttp ? '/data/index/rag.db' : './rag.db')
-  const SCAN_INTERVAL = Number.parseInt(process.env.SCAN_INTERVAL || '300', 10)
-  const MCP_API_KEY = process.env.MCP_API_KEY || ''
+  const PORT = env.PORT
+  const DB_PATH = env.DB_PATH
+  const SCAN_INTERVAL = env.SCAN_INTERVAL
+  const MCP_API_KEY = env.MCP_API_KEY
   // Session lifecycle bounds (HTTP mode only). TTL seconds = idle cutoff: a
   // client that disconnects without a closing POST /mcp leaves an orphaned
   // session otherwise, which would leak memory. Max sessions caps concurrent
   // clients when the rate-limited creation is not enough.
-  const MCP_SESSION_TTL_SECONDS = Number.parseInt(process.env.MCP_SESSION_TTL_SECONDS || '1800', 10)
-  const MCP_SESSION_MAX = Number.parseInt(process.env.MCP_SESSION_MAX || '100', 10)
+  const MCP_SESSION_TTL_SECONDS = env.MCP_SESSION_TTL_SECONDS
+  const MCP_SESSION_MAX = env.MCP_SESSION_MAX
   // New-session creation rate limit (POST /mcp without Mcp-Session-Id).
-  const MCP_SESSION_CREATE_RATE_PER_MINUTE = Number.parseInt(process.env.MCP_SESSION_CREATE_RATE_PER_MINUTE || '30', 10)
+  const MCP_SESSION_CREATE_RATE_PER_MINUTE = env.MCP_SESSION_CREATE_RATE_PER_MINUTE
 
   // Fail fast when HTTP mode is requested without an API key: without it the
   // REST admin endpoints, /search and /mcp would be exposed with no Bearer auth.
-  if (!requireHttpApiKey(isHttp, MCP_API_KEY)) {
+  if (!requireHttpApiKey(isHttpMode, MCP_API_KEY)) {
     logger.error('HTTP mode requires MCP_API_KEY to be set')
     process.exit(1)
   }
 
-  logger.info(`rag-hub-mcp v${process.env.RAG_VERSION || '0.0.1'} starting (${isHttp ? 'http' : 'stdio'})...`)
+  logger.info(`rag-hub-mcp v${env.RAG_VERSION} starting (${isHttpMode ? 'http' : 'stdio'})...`)
 
   const store = createStore(DB_PATH)
   logger.info('store initialized')
@@ -54,7 +49,7 @@ const main = async (): Promise<void> => {
     logger.error('initial scan failed', err)
   }
 
-  if (!isHttp) {
+  if (!isHttpMode) {
     // stdio transport: serve MCP tools on stdin/stdout for a local agent.
     const server = createMcpServer(store)
     const transport = new StdioServerTransport()
@@ -106,7 +101,7 @@ const main = async (): Promise<void> => {
     if (MCP_API_KEY) {
       const auth = request.headers.authorization
       if (auth !== `Bearer ${MCP_API_KEY}`) {
-        reply.code(401).send({ error: 'unauthorized' })
+        void reply.code(401).send({ error: 'unauthorized' })
         return
       }
     }
@@ -162,7 +157,7 @@ const main = async (): Promise<void> => {
   app.get('/mcp', (_request, reply) => {
     reply.send({
       name: 'rag-hub-mcp',
-      version: process.env.RAG_VERSION || '0.0.1',
+      version: env.RAG_VERSION,
       tools: [
         'rag_list_kbs',
         'rag_list_documents',

@@ -13,6 +13,9 @@
       "correctness": {
         "noUnusedVariables": "error"
       },
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "style": {
         "noInferrableTypes": "off"
       }

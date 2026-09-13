@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { deleteDocument, scanAll } from '../src/core/ingest.js'
-import { search } from '../src/core/search.js'
-import { createStore } from '../src/core/store.js'
-import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/testing/helpers.js'
-import type { Store } from '../src/types.js'
+import { deleteDocument, scanAll } from '../core/ingest.js'
+import { search } from '../core/search.js'
+import { createStore } from '../core/store.js'
+import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
+import type { Store } from '../types.js'
 
 describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> search', () => {
   let root: string

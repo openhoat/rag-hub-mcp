@@ -1,21 +1,14 @@
 .idea/
 .opencode/
 
-# Generated artifacts — build, coverage and sonar all live under dist/
+# Generated artifacts — build, coverage, sonar and docs all live under dist/
 dist/
 node_modules/
 .wireit/
 .vitest/
 .playwright-mcp/
 
-# VitePress build output & cache
-.vitepress/
-docs/.vitepress/dist/
-docs/.vitepress/cache/
-
-# Worktree sync marker
-.worktree-sync
-
 .env
 .env.local
+.envrc
 *.db

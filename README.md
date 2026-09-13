@@ -139,9 +139,11 @@ The full docs live at **[openhoat.github.io/rag-hub-mcp](https://openhoat.github
 npm install
 npm run build           # compile to dist/
 npm run validate        # lint + typecheck + test + build
-npm start               # start the server (stdio)
+npm run clean           # remove build artifacts (dist/)
+npm start               # start the server (stdio, from dist/)
+npm run start:dev       # start the server directly from TS (no build)
 npm start -- --http     # start in HTTP mode (REST + streamable-http MCP)
-npm run start:inspector # open the MCP Inspector web UI (launches dist/)
+npm run start:inspector # open the MCP Inspector web UI (launches via tsx, no build)
 ```
 
 Uses **Biome** for linting/formatting and **vitest** for unit + e2e tests. The source is split into layered modules (`core/`, `pipeline/`, `transport/`, `testing/`) — see the [architecture](https://openhoat.github.io/rag-hub-mcp/guide/architecture) doc for the full picture. Contributions are welcome.

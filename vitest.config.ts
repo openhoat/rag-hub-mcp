@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 /**
  * Two test projects:
  *  - unit         -> src/** /*.unit.test.ts          (pure/fast, mocked deps)
- *  - e2e          -> e2e-tests/** /*.e2e.test.ts      (real disk + SQLite + HTTP)
+ *  - e2e          -> src/e2e/** /*.e2e.test.ts         (real disk + SQLite + HTTP)
  *
  * Default `vitest run` (script `test`) runs BOTH, keeping the validate gate
  * comprehensive. Filter on demand with `vitest run --project unit` or
@@ -18,7 +18,21 @@ export default defineConfig({
   test: {
     projects: [
       { test: { ...shared, name: 'unit', include: ['src/**/*.unit.test.ts'] } },
-      { test: { ...shared, name: 'e2e', include: ['e2e-tests/**/*.e2e.test.ts'] } },
+      {
+        test: {
+          ...shared,
+          name: 'e2e',
+          include: ['src/e2e/**/*.e2e.test.ts'],
+          // Forks (child processes) + a single worker keeps the native
+          // better-sqlite3 addon in one clean process for the whole suite.
+          // Parallel worker teardown races the N-API cleanup hooks on process
+          // exit (RemoveEnvironmentCleanupHook SIGABRT). Per-file isolation
+          // (isolate: true, default) stops module state leaking between files.
+          pool: 'forks',
+          maxWorkers: 1,
+          fileParallelism: false,
+        },
+      },
     ],
     coverage: {
       provider: 'v8',

@@ -7,6 +7,9 @@ export default withMermaid(
     description: 'Self-hosted RAG that speaks MCP',
     base: '/rag-hub-mcp/',
 
+    outDir: '../dist/docs',
+    cacheDir: '../dist/.vitepress-cache',
+
     head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/rag-hub-mcp/logo.svg' }]],
 
     themeConfig: {

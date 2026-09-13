@@ -3,10 +3,10 @@ import type { Server as HttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createRestApp } from '../src/transport/rest.js'
-import { createStore } from '../src/core/store.js'
-import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/testing/helpers.js'
-import type { Store } from '../src/types.js'
+import { createStore } from '../core/store.js'
+import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
+import { createRestApp } from '../transport/rest.js'
+import type { Store } from '../types.js'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
@@ -98,20 +98,6 @@ describe('REST API (real store + ingest + search)', () => {
     const docRes = await fetch(`${base}/admin/kbs/tmp/documents`, { headers: AUTH })
     const body = (await docRes.json()) as Array<unknown>
     expect(body).toEqual([])
-  })
-
-  test('should reject path traversal in document creation', async () => {
-    const addRes = await fetch(`${base}/admin/kbs/docs/documents`, {
-      method: 'POST',
-      headers: { ...AUTH, ...JSON_HEADERS },
-      body: JSON.stringify({ path: '../../evil.md', content: 'escaped content' }),
-    })
-    expect(addRes.status).toBe(400)
-
-    // The document must not be indexed under the KB root.
-    const docsRes = await fetch(`${base}/admin/kbs/docs/documents`, { headers: AUTH })
-    const docs = (await docsRes.json()) as Array<{ relPath: string }>
-    expect(docs.some(d => d.relPath === 'evil.md')).toBe(false)
   })
 
   test('should reject path traversal in document creation', async () => {

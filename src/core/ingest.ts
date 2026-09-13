@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, type Stats, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import fastGlob from 'fast-glob'
+import { env } from '../config.js'
 import { getLogger } from '../log.js'
 import { chunkText } from '../pipeline/chunk.js'
 import { embedTexts } from '../pipeline/embed.js'
@@ -11,7 +12,7 @@ import { sanitizeRelativePath } from './path.js'
 
 const logger = getLogger('ingest')
 
-const KB_ROOT = process.env.KB_ROOT || '/data/kbs'
+const KB_ROOT = env.KB_ROOT
 
 interface KnownFile {
   id?: number
@@ -42,7 +43,7 @@ export const scanAll = async (store: Store, root: string = KB_ROOT): Promise<Ing
     if (kbId) await scanKb(store, kbId, kbName, root, knownFiles, result)
   }
 
-  cleanupStale(store, kbDirs, knownFiles, result)
+  await cleanupStale(store, kbDirs, knownFiles, result)
 
   logger.info(`scan: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped}`)
   return result

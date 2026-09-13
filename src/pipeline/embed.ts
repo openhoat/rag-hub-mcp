@@ -1,3 +1,5 @@
+import { env } from '../config.js'
+
 export interface EmbedConfig {
   baseUrl: string
   apiKey?: string
@@ -7,9 +9,9 @@ export interface EmbedConfig {
 
 const defaultConfig = (): EmbedConfig => {
   return {
-    baseUrl: process.env.EMBEDDINGS_BASE_URL || 'http://localhost:11434/v1',
-    apiKey: process.env.EMBEDDINGS_API_KEY || '',
-    model: process.env.EMBEDDINGS_MODEL || 'bge-m3',
+    baseUrl: env.EMBEDDINGS_BASE_URL,
+    apiKey: env.EMBEDDINGS_API_KEY,
+    model: env.EMBEDDINGS_MODEL,
   }
 }
 

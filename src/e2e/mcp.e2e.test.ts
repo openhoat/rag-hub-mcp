@@ -7,11 +7,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createMcpServer, createStreamableHttpTransport } from '../src/transport/mcp.js'
-import { createRestApp } from '../src/transport/rest.js'
-import { createStore } from '../src/core/store.js'
-import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../src/testing/helpers.js'
-import type { Store } from '../src/types.js'
+import { createStore } from '../core/store.js'
+import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
+import { createMcpServer, createStreamableHttpTransport } from '../transport/mcp.js'
+import { createRestApp } from '../transport/rest.js'
+import type { Store } from '../types.js'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }
 const ACCEPT = 'application/json, text/event-stream'
@@ -82,7 +82,7 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
       if (apiKey) {
         const auth = request.headers.authorization
         if (auth !== `Bearer ${apiKey}`) {
-          reply.code(401).send({ error: 'unauthorized' })
+          void reply.code(401).send({ error: 'unauthorized' })
           return
         }
       }

@@ -132,14 +132,13 @@ Le SDK MCP reçoit les objets Node natifs `IncomingMessage`/`ServerResponse` de 
 
 L'ordre d'import dans `index.ts` est critique :
 
-1. `import './preload.js'` s'exécute en premier (ordre ESM).
-2. `preload.ts` définit les défauts `KB_ROOT` / `DB_PATH` avec `??=` — les valeurs explicitement posées dans l'environnement priment.
-3. `ingest.ts` lit `KB_ROOT` au chargement du module ; `preload.ts` doit donc être évalué avant.
+1. `config.ts` parse l'environnement à l'import (schéma Zod, fail-fast) et calcule les défauts `KB_ROOT` / `DB_PATH` selon le transport (cwd relatif en stdio, chemins conteneur en HTTP).
+2. `ingest.ts` lit `KB_ROOT` au chargement du module ; comme `config.ts` est importé avant lui, la valeur est déjà figée.
 
 En mode stdio, les défauts sont relatifs au cwd (`./kbs`, `./rag.db`) ; en mode HTTP on garde les chemins conteneur (`/data/kbs`, `/data/index/rag.db`).
 
 ## Testing
 
 - **Unit** (`src/**/*.unit.test.ts`) : pur et rapide, dépendances mockées. L'endpoint `/embeddings` est mocké via `stubEmbeddingsApi` (intercepte `fetch` global pour ce seul chemin).
-- **E2E** (`e2e-tests/**/*.e2e.test.ts`) : vrai disque + SQLite + HTTP.
+- **E2E** (`src/e2e/**/*.e2e.test.ts`) : vrai disque + SQLite + HTTP.
 - Piège `KB_ROOT` : `ingest.ts` lit `KB_ROOT` au chargement du module → `vitest.setup.ts` le fixe sur un tmpdir partagé. Les tests qui déposent des fichiers écrivent dans ce `KB_ROOT` avec des noms de KB uniques.
