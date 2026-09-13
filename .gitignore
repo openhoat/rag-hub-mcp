@@ -1,6 +1,3 @@
-.idea/
-.opencode/
-
 # Generated artifacts — build, coverage, sonar and docs all live under dist/
 dist/
 node_modules/
@@ -8,6 +5,9 @@ node_modules/
 .vitest/
 .playwright-mcp/
 
+.idea/
+.opencode/
+.npm/
 .env
 .env.local
 .envrc
