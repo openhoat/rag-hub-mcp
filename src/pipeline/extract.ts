@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
+import { getLogger } from '../log.js'
 import type { ExtractResult } from '../types.js'
+
+const logger = getLogger('extract')
 
 /** Strip NUL bytes, which PostgreSQL rejects in TEXT columns (SQLite tolerates them). */
 const sanitizeText = (text: string): string => text.replace(/\0/g, '')
@@ -77,12 +80,35 @@ export const isTextFile = (filePath: string): boolean => {
   return TEXT_EXTENSIONS.has(extname(filePath).toLowerCase())
 }
 
+/**
+ * pdf.js logs diagnostics via `console.log` in its worker, bypassing pino and
+ * the configured log level. Re-route those lines through pino (which honors
+ * LOG_LEVEL) while the extractor runs.
+ */
+const routePdfConsole = async <T>(fn: () => Promise<T>): Promise<T> => {
+  const original = console.log
+  console.log = (...args: unknown[]) => {
+    const msg = args
+      .map(a => (typeof a === 'string' ? a : String(a)))
+      .join(' ')
+      .replace(/^Warning:\s*/, '')
+    if (msg.trim()) logger.warn(msg)
+  }
+  try {
+    return await fn()
+  } finally {
+    console.log = original
+  }
+}
+
 const extractPdf = async (filePath: string): Promise<ExtractResult> => {
   try {
-    const parse = (await import('pdf-parse')).default || (await import('pdf-parse'))
-    const buf = readFileSync(filePath)
-    const data = await parse(buf)
-    return { text: data.text || '', frontmatter: null }
+    return await routePdfConsole(async () => {
+      const parse = (await import('pdf-parse')).default || (await import('pdf-parse'))
+      const buf = readFileSync(filePath)
+      const data = await parse(buf)
+      return { text: data.text || '', frontmatter: null }
+    })
   } catch {
     return { text: '', frontmatter: null }
   }
