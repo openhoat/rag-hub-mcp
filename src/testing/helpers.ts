@@ -1,8 +1,44 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import type { Server as HttpServer } from 'node:http'
 import { dirname, join } from 'node:path'
+import type { PGliteInterface } from '@electric-sql/pglite'
+import { PGlite } from '@electric-sql/pglite'
+import { vector as pgliteVector } from '@electric-sql/pglite-pgvector'
 import type { FastifyInstance } from 'fastify'
+import { createPgStoreFromDb, type Db } from '../core/pgStore.js'
 import type { ChunkRecord, KbInfo, Store } from '../types.js'
+
+/**
+ * Bridge an in-memory PGlite (real Postgres compiled to WASM + pgvector) to the
+ * `Db` interface consumed by PgStore, so the PostgreSQL backend can be tested
+ * without any server or docker.
+ */
+export const pgliteToDb = (p: PGliteInterface): Db => ({
+  query: async <TResult extends Record<string, unknown> = { [k: string]: unknown }>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<{ rows: TResult[] }> => {
+    const res = await p.query<TResult>(sql, params)
+    return { rows: res.rows }
+  },
+  exec: async (sql: string): Promise<void> => {
+    await p.exec(sql)
+  },
+  transaction: async <T>(fn: (client: { query: Db['query'] }) => Promise<T>): Promise<T> => {
+    return p.transaction(async tx => {
+      return fn({ query: tx.query.bind(tx) })
+    })
+  },
+  close: async (): Promise<void> => {
+    await p.close()
+  },
+})
+
+/** Create an in-memory PostgreSQL store backed by PGlite (+ pgvector). */
+export const createPgliteStore = async (dimension = 4): Promise<Store> => {
+  const db = new PGlite({ extensions: { vector: pgliteVector } })
+  return createPgStoreFromDb(pgliteToDb(db), dimension)
+}
 
 export const writeKbDocument = (root: string, kb: string, relPath: string, content: string): void => {
   const full = join(root, kb, relPath)

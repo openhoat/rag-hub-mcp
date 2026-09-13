@@ -43,8 +43,7 @@ export default defineConfig({
         'src/testing/helpers.ts',
         'src/index.ts',
         'src/log.ts',
-        // The pluggable factory is exercised together with the PostgreSQL e2e.
-        'src/core/storeFactory.ts',
+        // The store factory is covered by its unit test (src/core/storeFactory.unit.test.ts).
       ],
       reporter: ['text', 'lcov'],
       thresholds: {

@@ -1,7 +1,5 @@
-import { PGlite } from '@electric-sql/pglite'
-import { vector as pgliteVector } from '@electric-sql/pglite-pgvector'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import { createPgStoreFromDb, type Db } from '../core/pgStore.js'
+import { createPgliteStore } from '../testing/helpers.js'
 import type { Store } from '../types.js'
 
 /**
@@ -11,34 +9,11 @@ import type { Store } from '../types.js'
  * intentionally distinct from the production database.
  */
 let store: Store
-let db: PGlite
-
-const pgliteToDb = (p: PGlite): Db => ({
-  query: async <TResult extends Record<string, unknown> = { [k: string]: unknown }>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<{ rows: TResult[] }> => {
-    const res = await p.query<TResult>(sql, params)
-    return { rows: res.rows }
-  },
-  exec: async (sql: string): Promise<void> => {
-    await p.exec(sql)
-  },
-  transaction: async <T>(fn: (client: { query: Db['query'] }) => Promise<T>): Promise<T> => {
-    return p.transaction(async tx => {
-      return fn({ query: tx.query.bind(tx) })
-    })
-  },
-  close: async (): Promise<void> => {
-    await p.close()
-  },
-})
 
 const makeEmbedding = (dimension = 4): Float32Array => new Float32Array(dimension)
 
 beforeAll(async () => {
-  db = new PGlite({ extensions: { vector: pgliteVector } })
-  store = await createPgStoreFromDb(pgliteToDb(db), 4)
+  store = await createPgliteStore(4)
 })
 
 afterAll(async () => {
