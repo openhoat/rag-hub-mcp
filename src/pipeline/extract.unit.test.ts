@@ -19,6 +19,15 @@ describe('extractText', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  test('should strip NUL bytes from extracted text', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'nul.txt')
+    writeFileSync(p, 'hello\u0000world', 'utf-8')
+    const { text } = await extractText(p)
+    expect(text).toBe('helloworld')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   test('should read markdown and code files', async () => {
     const dir = makeDir()
     const p = join(dir, 'doc.md')

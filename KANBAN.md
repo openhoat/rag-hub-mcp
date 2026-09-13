@@ -23,8 +23,7 @@
     - [x] Add PostgreSQL config (STORE_BACKEND, DATABASE_URL/PG_*, EMBEDDINGS_DIMENSION) to config.ts + .env.example
     - [x] Implement PgStore (src/core/pgStore.ts): pg + pgvector + generated tsv/ts_rank FTS
     - [x] storeFactory.ts pluggable selection (sqlite default / postgres opt-in), index.ts
-    - [x] docker-compose.yml (pgvector:pg16) for local dev/tests
-    - [x] pg dependency + e2e pgstore.e2e.test.ts (graceful skip when no Postgres)
+    - [x] pg dependency + e2e pgstore.e2e.test.ts via PGlite in-memory (Postgres WASM + pgvector, no docker/server)
     - [x] Update docs (architecture, configuration, README)
 
 ## In Progress

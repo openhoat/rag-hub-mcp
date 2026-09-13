@@ -2,9 +2,16 @@ import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
 import type { ExtractResult } from '../types.js'
 
+/** Strip NUL bytes, which PostgreSQL rejects in TEXT columns (SQLite tolerates them). */
+const sanitizeText = (text: string): string => text.replace(/\0/g, '')
+
 export const extractText = async (filePath: string): Promise<ExtractResult> => {
   const ext = extname(filePath).toLowerCase()
+  const result = await extractByExt(ext, filePath)
+  return { ...result, text: sanitizeText(result.text), frontmatter: result.frontmatter }
+}
 
+const extractByExt = async (ext: string, filePath: string): Promise<ExtractResult> => {
   switch (ext) {
     case '.md':
       return parseFrontmatter(readFileSync(filePath, 'utf-8'))
