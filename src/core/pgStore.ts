@@ -1,6 +1,20 @@
-import { Pool, type PoolClient, type QueryResult } from 'pg'
+import { Pool, type PoolClient, type QueryResultRow } from 'pg'
 import { env } from '../config.js'
 import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../types.js'
+
+/** Minimal async query surface consumed by PgStore, so the backing driver (a
+ * `pg.Pool` in prod, an in-memory PGlite in tests) can be injected. */
+export interface DbQuery {
+  query<TResult extends Record<string, unknown> = PgRow>(sql: string, params?: unknown[]): Promise<{ rows: TResult[] }>
+}
+
+export interface Db extends DbQuery {
+  /** Execute a multi-statement SQL script (migration). pg.Pool has no exec, so
+   * it is emulated by running each statement; PGlite natively supports it. */
+  exec(sql: string): Promise<void>
+  transaction<T>(fn: (client: DbQuery) => Promise<T>): Promise<T>
+  close(): Promise<void>
+}
 
 /**
  * PostgreSQL + pgvector implementation of the Store interface.
@@ -14,8 +28,7 @@ import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, St
  *
  * Migration is idempotent and runs on first connect.
  */
-/** idempotent DDL. Uses the configured embedding dimension for the vector column. */
-const migrateSql = (dimension: number): string => `
+export const migrateSql = (dimension: number): string => `
   CREATE EXTENSION IF NOT EXISTS vector;
 
   CREATE TABLE IF NOT EXISTS kbs (
@@ -51,29 +64,32 @@ const migrateSql = (dimension: number): string => `
 `
 
 /** Build the pg Pool connection config from env (DATABASE_URL wins over PG_*). */
-const buildPoolConfig = (): { connectionString: string; ssl?: boolean } => {
-  if (env.DATABASE_URL) return { connectionString: env.DATABASE_URL, ssl: env.PG_SSL || undefined }
+export const buildPoolConfig = (): { connectionString: string; ssl?: boolean; connectionTimeoutMillis?: number } => {
+  if (env.DATABASE_URL) {
+    return { connectionString: env.DATABASE_URL, ssl: env.PG_SSL || undefined, connectionTimeoutMillis: 3000 }
+  }
   return {
     connectionString: `postgres://${env.PG_USER ?? ''}:${env.PG_PASSWORD ?? ''}@${env.PG_HOST ?? 'localhost'}:${env.PG_PORT}/${env.PG_DATABASE ?? 'raghub'}`,
     ssl: env.PG_SSL || undefined,
+    connectionTimeoutMillis: 3000,
   }
 }
 
 /** Convert a Float32Array to a pgvector literal `[a,b,c]`. */
-const vectorToArray = (vec: Float32Array, dimension: number): string => {
+export const vectorToArray = (vec: Float32Array, dimension: number): string => {
   const floats = vec.length > dimension ? vec.slice(0, dimension) : vec
   return `[${Array.from(floats).join(',')}]`
 }
 
 /** Convert a pgvector literal `[a,b,c]` back to a Float32Array. */
-const vectorToArrayFromText = (value: string | null): Float32Array | null => {
+export const vectorToArrayFromText = (value: string | null): Float32Array | null => {
   if (value === null) return null
   return Float32Array.from(value.slice(1, -1).split(',').map(Number))
 }
 
 /** Map a pg `ts_rank` (higher = better) to a positive [0,1] relevance. */
-const normalizeTsRank = (rank: number): number => {
-  return Math.min(1, Math.max(0, 1 / (1 + rank)))
+export const normalizeTsRank = (rank: number): number => {
+  return Math.min(1, Math.max(0, rank / (1 + rank)))
 }
 
 interface PgRow {
@@ -94,35 +110,82 @@ interface PgRow {
   chunkCount?: number | string
   totalBytes?: number | string
   rank?: number | string
+  [key: string]: unknown
 }
 
 /** Coerce a pg numeric value (string | number) into a JS number. */
 const toNum = (v: number | string | undefined | null): number => (v === undefined || v === null ? 0 : Number(v))
 
-const runInTransaction = async <T>(pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> => {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const result = await fn(client)
-    await client.query('COMMIT')
-    return result
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
+/** Adapt a `pg.Pool` to the Db interface used by PgStore. */
+export const poolToDb = (pool: Pool): Db => ({
+  query: async <TResult extends QueryResultRow = PgRow>(sql: string, params: unknown[] = []): Promise<{ rows: TResult[] }> => {
+    return pool.query<TResult>(sql, params)
+  },
+  exec: async (sql: string): Promise<void> => {
+    for (const stmt of splitStatements(sql)) {
+      await pool.query(stmt)
+    }
+  },
+  transaction: async <T>(fn: (client: DbQuery) => Promise<T>): Promise<T> => {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await fn(toDbQuery(client))
+      await client.query('COMMIT')
+      return result
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+  },
+  close: async (): Promise<void> => {
+    await pool.end()
+  },
+})
+
+const toDbQuery = (client: PoolClient): DbQuery => ({
+  query: async <TResult extends QueryResultRow = PgRow>(sql: string, params: unknown[] = []): Promise<{ rows: TResult[] }> => {
+    return client.query<TResult>(sql, params)
+  },
+})
+
+/** Split a multi-statement script on semicolons at top level (outside of
+ * string literals), so pg can run it statement-by-statement. */
+const splitStatements = (sql: string): string[] => {
+  const statements: string[] = []
+  let current = ''
+  let inQuote = false
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]
+    if (ch === "'" && sql[i - 1] !== '\\') inQuote = !inQuote
+    if (ch === ';' && !inQuote) {
+      if (current.trim()) statements.push(current.trim())
+      current = ''
+    } else {
+      current += ch
+    }
   }
+  if (current.trim()) statements.push(current.trim())
+  return statements
 }
 
-class PgStore implements Store {
-  constructor(private readonly pool: Pool) {}
+export class PgStore implements Store {
+  constructor(
+    private readonly db: Db,
+    private readonly dimension: number = env.EMBEDDINGS_DIMENSION,
+  ) {}
 
-  private query = async (sql: string, params: unknown[] = []): Promise<QueryResult<PgRow>> => {
-    return this.pool.query<PgRow>(sql, params)
+  private query = async <TResult extends Record<string, unknown> = PgRow>(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<{ rows: TResult[] }> => {
+    return this.db.query<TResult>(sql, params)
   }
 
   close = async (): Promise<void> => {
-    await this.pool.end()
+    await this.db.close()
   }
 
   listKbs = async (): Promise<KbInfo[]> => {
@@ -185,7 +248,7 @@ class PgStore implements Store {
   }
 
   upsertFile = async (rec: FileRecord): Promise<number> => {
-    return runInTransaction(this.pool, async client => {
+    return this.db.transaction(async client => {
       const existing = await client.query<PgRow>('SELECT id FROM files WHERE kb_id = $1 AND rel_path = $2', [rec.kbId, rec.relPath])
       if (existing.rows.length > 0) {
         const id = toNum(existing.rows[0].id)
@@ -226,10 +289,10 @@ class PgStore implements Store {
   }
 
   insertChunk = async (rec: Omit<ChunkRecord, 'id'>): Promise<number> => {
-    return runInTransaction(this.pool, async client => {
+    return this.db.transaction(async client => {
       // Idempotency: purge any pre-existing chunk for this file/chunk_index before insert.
       await client.query('DELETE FROM chunks WHERE file_id = $1 AND chunk_index = $2', [rec.fileId, rec.chunkIndex])
-      const embedding = rec.embedding ? vectorToArray(rec.embedding, env.EMBEDDINGS_DIMENSION) : null
+      const embedding = rec.embedding ? vectorToArray(rec.embedding, this.dimension) : null
       const r = await client.query<PgRow>(
         'INSERT INTO chunks (file_id, chunk_index, content, metadata, embedding) VALUES ($1, $2, $3, $4::jsonb, $5::vector) RETURNING id',
         [rec.fileId, rec.chunkIndex, rec.content, rec.metadata, embedding],
@@ -327,10 +390,20 @@ class PgStore implements Store {
   }
 }
 
-/** Create a PostgreSQL-backed Store. Migration runs before returning. */
+/** Create a PostgreSQL-backed Store over an injected Db (prod: pg.Pool via
+ * `poolToDb`; tests: in-memory PGlite). Migration runs before returning. */
+export const createPgStoreFromDb = async (db: Db, dimension: number = env.EMBEDDINGS_DIMENSION): Promise<Store> => {
+  await db.exec(migrateSql(dimension))
+  return new PgStore(db, dimension)
+}
+
+/** Create a PostgreSQL-backed Store from the configured env connection. */
 export const createPgStore = async (): Promise<Store> => {
   const pool = new Pool(buildPoolConfig())
-  const store = new PgStore(pool)
-  await pool.query(migrateSql(env.EMBEDDINGS_DIMENSION))
-  return store
+  try {
+    return await createPgStoreFromDb(poolToDb(pool))
+  } catch (err) {
+    await pool.end()
+    throw err
+  }
 }

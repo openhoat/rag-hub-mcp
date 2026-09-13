@@ -43,10 +43,7 @@ export default defineConfig({
         'src/testing/helpers.ts',
         'src/index.ts',
         'src/log.ts',
-        // PostgreSQL backend validated by its own e2e (src/e2e/pgstore.e2e.test.ts)
-        // against a real pgvector server; skipped (and uncovered) when Postgres
-        // is not running. The pluggable factory is covered together with it.
-        'src/core/pgStore.ts',
+        // The pluggable factory is exercised together with the PostgreSQL e2e.
         'src/core/storeFactory.ts',
       ],
       reporter: ['text', 'lcov'],

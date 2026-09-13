@@ -130,8 +130,9 @@ ingest.ts / search.ts / transport/
 - La signature `searchFts(words: string[])` abstrait la syntaxe full-text :
   chaque backend construit sa requête native (`"w1" AND "w2"` FTS5 vs
   `to_tsquery('w1 & w2')`).
-- Tests : `src/e2e/pgstore.e2e.test.ts` contre un vrai pgvector
-  (`docker compose up -d postgres`), avec skip gracieux si le serveur est absent.
+- Tests : `src/e2e/pgstore.e2e.test.ts` contre un véritable moteur Postgres compilé
+  en WASM (**PGlite** + extension pgvector), instancié en mémoire pour la durée
+  des tests — aucun serveur, aucun docker, distinct de la base de production.
 
 ## Recherche hybride
 

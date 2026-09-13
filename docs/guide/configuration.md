@@ -50,13 +50,10 @@ required — nothing else to start.
 ### PostgreSQL (pgvector)
 
 Opt-in for deployments that prefer a server-side store. Embeds the pgvector
-extension (vector column + `ts_rank` full-text search). Enable it with:
+extension (vector column + `ts_rank` full-text search). Point the server at a
+reachable Postgres with the `vector` extension:
 
 ```bash
-# docker-compose.yml ships a local pgvector image for dev/tests
-docker compose up -d postgres
-
-# then point the server at it
 STORE_BACKEND=postgres \
 DATABASE_URL=postgres://raghub:raghub@localhost:5432/raghub \
 node dist/index.js
@@ -65,6 +62,10 @@ node dist/index.js
 The schema and the `vector` extension are created idempotently on first
 connect. Set `EMBEDDINGS_DIMENSION` to match your model before ingesting —
 the column is sized once at migration time.
+
+> Tests : the PostgreSQL backend is exercised without any server via **PGlite**,
+> a real Postgres engine compiled to WASM with the pgvector extension bundled,
+> instantiated in-memory for the duration of the suite (see `src/e2e/pgstore.e2e.test.ts`).
 
 ## Transport modes
 
