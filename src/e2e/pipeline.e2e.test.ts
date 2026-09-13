@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { deleteDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
-import { createStore } from '../core/store.js'
+import { createSqliteStore } from '../core/store.js'
 import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
 import type { Store } from '../types.js'
 
@@ -26,7 +26,7 @@ describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> s
   const setup = () => {
     root = mkdtempSync(join(tmpdir(), 'rag-pipeline-'))
     const dir = mkdtempSync(join(tmpdir(), 'rag-pipeline-db-'))
-    store = createStore(join(dir, 'rag.db'))
+    store = createSqliteStore(join(dir, 'rag.db'))
   }
 
   test('should index real text files on scan and return them via search', async () => {

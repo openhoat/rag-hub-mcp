@@ -11,7 +11,7 @@ import type { Store } from '../types.js'
 const log = getLogger('rest')
 
 const MCP_API_KEY = env.MCP_API_KEY
-const RAG_VERSION = env.RAG_VERSION
+const VERSION = env.VERSION
 const CORS_ORIGINS = corsOrigins
 
 const auth = (req: FastifyRequest, reply: FastifyReply): boolean => {
@@ -122,7 +122,7 @@ export const createRestApp = async (store: Store) => {
   const reindexLimiter = { config: { rateLimit: { max: REINDEX_LIMIT, timeWindow: 60_000 } } }
 
   app.get('/health', (_req, reply) => {
-    void reply.send({ status: 'ok', version: RAG_VERSION })
+    void reply.send({ status: 'ok', version: VERSION })
   })
 
   app.get('/admin/kbs', async (req, reply) => {

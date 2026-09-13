@@ -13,14 +13,26 @@ const EnvSchema = z.object({
   EMBEDDINGS_BASE_URL: z.string().default('http://localhost:11434/v1'),
   EMBEDDINGS_API_KEY: z.string().default(''),
   EMBEDDINGS_MODEL: z.string().default('bge-m3'),
+  EMBEDDINGS_DIMENSION: z.coerce.number().int().min(1).default(1024),
+  STORE_BACKEND: z.enum(['sqlite', 'postgres']).default('sqlite'),
+  DATABASE_URL: z.string().optional(),
+  PG_HOST: z.string().optional(),
+  PG_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
+  PG_DATABASE: z.string().optional(),
+  PG_USER: z.string().optional(),
+  PG_PASSWORD: z.string().optional(),
+  PG_SSL: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform(v => (v === undefined ? false : v === 'true')),
   KB_ROOT: z.string().default(isHttp ? '/data/kbs' : './kbs'),
   DB_PATH: z.string().default(isHttp ? '/data/index/rag.db' : './rag.db'),
   SCAN_INTERVAL: z.coerce.number().int().min(0).default(300),
   PORT: z.coerce.number().int().min(1).max(65535).default(8000),
   CORS_ORIGINS: z.string().default(''),
-  RAG_VERSION: z.string().default('0.0.1'),
+  VERSION: z.string().default('0.0.1'),
   RAG_TRANSPORT: z.enum(['stdio', 'http']).optional(),
-  RAG_LOG_LEVEL: z.string().default('info'),
+  LOG_LEVEL: z.string().default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   MCP_SESSION_TTL_SECONDS: z.coerce.number().int().min(0).default(1800),
   MCP_SESSION_MAX: z.coerce.number().int().min(1).default(100),
@@ -28,6 +40,9 @@ const EnvSchema = z.object({
 })
 
 export const env = EnvSchema.parse(process.env)
+
+/** Names of every variable in the env schema, for tests to isolate process.env. */
+export const ENV_KEYS: readonly string[] = Object.keys(EnvSchema.shape)
 
 /** True when serving the streamable-http/REST transport instead of stdio. */
 export const isHttpMode = isHttp

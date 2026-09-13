@@ -66,9 +66,8 @@ const scoreChunk = (
 
 const scoreVector = (queryEmb: Float32Array | undefined, chunk: ChunkRecord, weight: number): number => {
   if (!queryEmb || !chunk.embedding || chunk.embedding.length < 4) return 0
-  const vec = new Float32Array(chunk.embedding.buffer, chunk.embedding.byteOffset, chunk.embedding.byteLength / 4)
-  if (vec.length !== queryEmb.length) return 0
-  const sim = cosineSimilarity(queryEmb, vec)
+  if (chunk.embedding.length !== queryEmb.length) return 0
+  const sim = cosineSimilarity(queryEmb, chunk.embedding)
   return sim > 0.08 ? sim * weight : 0
 }
 
@@ -76,11 +75,10 @@ const buildFtsScores = async (store: Store, query: string): Promise<Map<number, 
   const scores = new Map<number, number>()
   const words = query.split(/\s+/).filter(w => w.length > 2)
   if (words.length === 0) return null
-  const matchQuery = words.map(w => `"${w}"`).join(' AND ')
-  const rows = await store.searchFts(matchQuery)
+  const rows = await store.searchFts(words)
   if (rows === null) return null
   for (const row of rows) {
-    scores.set(row.id, clamp(1 / (1 + Math.abs(row.rank)), 0, 1))
+    scores.set(row.id, clamp(row.score, 0, 1))
   }
   return scores
 }

@@ -16,8 +16,16 @@
 
 ### #9 [ARCHITECTURE] Make Store interface async + introduce PostgreSQL backend (P2)
 
-- [ ] Phase 1: make Store async, encapsulate store.db, fix SIGABRT
+- [x] Phase 1: make Store async, encapsulate store.db, fix SIGABRT
 - [x] Audit impact & choose direction (PostgreSQL + pgvector pluggable)
+- [x] Phase 2: pluggable PostgreSQL backend
+    - [x] Abstract FTS signature (`searchFts(words[])`) in types.ts / store.ts / search.ts
+    - [x] Add PostgreSQL config (STORE_BACKEND, DATABASE_URL/PG_*, EMBEDDINGS_DIMENSION) to config.ts + .env.example
+    - [x] Implement PgStore (src/core/pgStore.ts): pg + pgvector + generated tsv/ts_rank FTS
+    - [x] storeFactory.ts pluggable selection (sqlite default / postgres opt-in), index.ts
+    - [x] docker-compose.yml (pgvector:pg16) for local dev/tests
+    - [x] pg dependency + e2e pgstore.e2e.test.ts (graceful skip when no Postgres)
+    - [x] Update docs (architecture, configuration, README)
 
 ## In Progress
 

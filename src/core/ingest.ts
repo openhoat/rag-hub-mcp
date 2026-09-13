@@ -179,8 +179,7 @@ export const indexFile = async (
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i]
     const emb = embeddings[i]
-    const embBuf = emb ? Buffer.from(emb.buffer) : null
-    await store.insertChunk({ fileId, chunkIndex: i, content: c.content, metadata: c.metadata, embedding: embBuf })
+    await store.insertChunk({ fileId, chunkIndex: i, content: c.content, metadata: c.metadata, embedding: emb })
   }
 }
 

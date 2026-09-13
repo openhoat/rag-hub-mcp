@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import type { Store } from '../types.js'
-import { createStore } from './store.js'
+import { createSqliteStore } from './store.js'
 
 const makeStore = (): { store: Store; dir: string } => {
   const dir = mkdtempSync(join(tmpdir(), 'rag-store-'))
-  const store = createStore(join(dir, 'rag.db'))
+  const store = createSqliteStore(join(dir, 'rag.db'))
   return { store, dir }
 }
 

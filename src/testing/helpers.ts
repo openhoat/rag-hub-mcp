@@ -17,7 +17,7 @@ export const makeChunk = (id: number, kb: string, content: string, embedding?: n
     chunkIndex: 0,
     content,
     metadata: JSON.stringify({ kb, path: `${kb}/file.md`, headings: '' }),
-    embedding: embedding ? Buffer.from(new Float32Array(embedding).buffer) : null,
+    embedding: embedding ? Float32Array.from(embedding) : null,
   }
 }
 

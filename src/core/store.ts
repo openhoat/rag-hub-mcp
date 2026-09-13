@@ -1,6 +1,24 @@
 import Database from 'better-sqlite3'
 import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../types.js'
 
+/** A raw SQLite chunks row (snake_case columns returned by better-sqlite3). */
+interface RawChunkRow {
+  id: number
+  file_id: number
+  chunk_index: number
+  content: string
+  metadata: string
+  embedding: Buffer | null
+}
+
+/**
+ * Map an FTS5 rank (ascending, better match => more negative) to a positive
+ * [0,1] relevance so the Store contract is backend-neutral.
+ */
+const normalizeFtsRank = (rank: number): number => {
+  return Math.min(1, Math.max(0, 1 / (1 + Math.abs(rank))))
+}
+
 const migrate = (db: Database.Database): void => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS kbs (
@@ -151,7 +169,20 @@ class StoreImpl implements Store {
   }
 
   getAllChunks = async (kb?: string | string[]): Promise<ChunkRecord[]> => {
-    if (!kb) return this.db.prepare('SELECT * FROM chunks').all() as ChunkRecord[]
+    const toChunk = (r: RawChunkRow): ChunkRecord => ({
+      id: r.id,
+      fileId: r.file_id,
+      chunkIndex: r.chunk_index,
+      content: r.content,
+      metadata: r.metadata,
+      embedding: r.embedding ? new Float32Array(r.embedding.buffer, r.embedding.byteOffset, r.embedding.byteLength / 4) : null,
+    })
+    if (!kb) {
+      const rows = this.db
+        .prepare('SELECT id, file_id, chunk_index, content, metadata, embedding FROM chunks')
+        .all() as unknown as RawChunkRow[]
+      return rows.map(toChunk)
+    }
     const names = Array.isArray(kb) ? kb : [kb]
     const kbIds: number[] = []
     for (const name of names) {
@@ -160,13 +191,15 @@ class StoreImpl implements Store {
     }
     if (kbIds.length === 0) return []
     const placeholders = kbIds.map(() => '?').join(', ')
-    return this.db
+    const rows = this.db
       .prepare(`
-        SELECT c.* FROM chunks c
+        SELECT c.id, c.file_id, c.chunk_index, c.content, c.metadata, c.embedding
+        FROM chunks c
         JOIN files f ON c.file_id = f.id
         WHERE f.kb_id IN (${placeholders})
       `)
-      .all(...kbIds) as ChunkRecord[]
+      .all(...kbIds) as unknown as RawChunkRow[]
+    return rows.map(toChunk)
   }
 
   updateFileMtime = async (id: number, mtime: number): Promise<void> => {
@@ -192,17 +225,25 @@ class StoreImpl implements Store {
     return rows
   }
 
-  searchFts = async (matchQuery: string): Promise<FtsRow[] | null> => {
+  searchFts = async (words: string[]): Promise<FtsRow[] | null> => {
+    if (words.length === 0) return null
+    const matchQuery = words.map(w => `"${w}"`).join(' AND ')
     try {
-      const rows = this.db.prepare('SELECT rowid AS id, rank FROM fts_chunks WHERE fts_chunks MATCH ?').all(matchQuery) as FtsRow[]
-      return rows
+      const rows = this.db.prepare('SELECT rowid AS id, rank FROM fts_chunks WHERE fts_chunks MATCH ? ORDER BY rank').all(matchQuery) as {
+        id: number
+        rank: number
+      }[]
+      // FTS5 ranks ascending (better match => more negative). Normalize to a
+      // positive [0,1] relevance so the Store contract is backend-neutral.
+      const scores = rows.map(r => ({ id: r.id, score: normalizeFtsRank(r.rank) }))
+      return scores
     } catch {
       return null
     }
   }
 }
 
-export const createStore = (dbPath: string): Store => {
+export const createSqliteStore = (dbPath: string): Store => {
   const db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')

@@ -11,7 +11,7 @@ interface LogMethods {
 }
 
 const base = pino({
-  level: env.RAG_LOG_LEVEL,
+  level: env.LOG_LEVEL,
   base: undefined,
   ...(env.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty', options: { colorize: true } } } : { destination: 2 }),
 })

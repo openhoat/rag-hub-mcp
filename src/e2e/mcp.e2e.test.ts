@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createStore } from '../core/store.js'
+import { createSqliteStore } from '../core/store.js'
 import { stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
 import { createMcpServer, createStreamableHttpTransport } from '../transport/mcp.js'
 import { createRestApp } from '../transport/rest.js'
@@ -66,7 +66,7 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
   beforeEach(async () => {
     restoreFetch = stubEmbeddingsApi(texts => texts.map(() => unitEmbeddings(4)))
     root = mkdtempSync(join(tmpdir(), 'rag-mcp-'))
-    store = createStore(join(root, 'rag.db'))
+    store = createSqliteStore(join(root, 'rag.db'))
     app = await createRestApp(store)
     sessions = new Map<string, SessionEntry>()
 

@@ -6,14 +6,14 @@ import { search } from './search.js'
 // Embeddings are served via a stubbed global fetch (OpenAI-compatible format).
 // embedTexts returns a single query vector, and cosineSimilarity runs for real.
 
-const makeStore = (chunks: ChunkRecord[], searchFts?: (query: string) => Array<{ id: number; rank: number }> | null): Store => {
+const makeStore = (chunks: ChunkRecord[], searchFts?: (words: string[]) => Array<{ id: number; score: number }> | null): Store => {
   return makeStubStore({
     async getAllChunks(kb?: string | string[]): Promise<ChunkRecord[]> {
       const names = kb ? (Array.isArray(kb) ? kb : [kb]) : null
       if (names) return chunks.filter(c => names.includes((JSON.parse(c.metadata) as { kb: string }).kb))
       return chunks
     },
-    searchFts: async (query: string) => (searchFts ? searchFts(query) : null),
+    searchFts: async (words: string[]) => (searchFts ? searchFts(words) : null),
   })
 }
 
@@ -29,11 +29,10 @@ afterEach(() => {
 
 describe('search', () => {
   test('should rank keyword matches via FTS and cap content', async () => {
-    const rowsByQuery: Record<string, Array<{ id: number; rank: number }>> = { 'quick AND fox': [{ id: 1, rank: -1 }] }
+    const rowsByQuery: Record<string, Array<{ id: number; score: number }>> = { 'quick AND fox': [{ id: 1, score: 0.5 }] }
     const store = makeStore(
       [makeChunk(1, 'kb', 'the quick brown fox jumps over the lazy dog'), makeChunk(2, 'kb', 'a completely unrelated chunk')],
-      matchQuery => {
-        const words = matchQuery.match(/"([^"]+)"/g)?.map(w => w.replaceAll('"', '')) ?? []
+      words => {
         return rowsByQuery[words.join(' AND ')] ?? []
       },
     )

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { Store } from '../types.js'
-import { createStore } from './store.js'
+import { createSqliteStore } from './store.js'
 
 vi.mock('../pipeline/embed.js', () => ({
   embedTexts: vi.fn(async () => [new Float32Array([0.5, 0.5])]),
@@ -23,7 +23,7 @@ let store: Store
 const setupKb = (): { root: string; store: Store } => {
   const dir = mkdtempSync(join(tmpdir(), 'rag-ingest-'))
   const dbDir = mkdtempSync(join(tmpdir(), 'rag-ingest-db-'))
-  const s = createStore(join(dbDir, 'rag.db'))
+  const s = createSqliteStore(join(dbDir, 'rag.db'))
   const kbRoot = join(dir, 'kbs')
   mkdirSync(join(kbRoot, 'docs'), { recursive: true })
   return { root: kbRoot, store: s }

@@ -1,6 +1,6 @@
 # Architecture
 
-`rag-hub-mcp` est un process unique : il surveille un dossier racine, ingère les documents dans une base SQLite, et les expose via MCP et REST. Il n'y a pas de base vectorielle séparée — l'index vit dans un seul fichier SQLite avec FTS5.
+`rag-hub-mcp` est un process unique : il surveille un dossier racine, ingère les documents dans un index local (SQLite par défaut), et les expose via MCP et REST. Deux backends de stockage implémentent la même interface `Store` — SQLite/FTS5 (par défaut, autonome) et PostgreSQL + pgvector (opt-in).
 
 ## Vue en couches
 
@@ -10,7 +10,6 @@ Le code source (`src/`) est organisé en quatre couches, dépendances pointées 
 graph TD
     subgraph BOOT["bootstrap"]
         INDEX["index.ts<br/>choix transport, init, scan"]
-        PRELOAD["preload.ts<br/>défauts env"]
         LOG["log.ts"]
     end
 
@@ -20,7 +19,9 @@ graph TD
     end
 
     subgraph CORE["core — logique métier"]
+        FACTORY["storeFactory.ts<br/>choix backend (sqlite | postgres)"]
         STORE["store.ts<br/>SQLite + FTS5"]
+        PGSTORE["pgStore.ts<br/>PostgreSQL + pgvector"]
         INGEST["ingest.ts<br/>scan + indexation"]
         SEARCH["search.ts<br/>recherche hybride"]
     end
@@ -31,9 +32,10 @@ graph TD
         EMBED["embed.ts"]
     end
 
-    INDEX --> PRELOAD
     INDEX --> LOG
-    INDEX --> STORE
+    INDEX --> FACTORY
+    FACTORY --> STORE
+    FACTORY --> PGSTORE
     INDEX --> INGEST
     INDEX --> MCP
     INDEX --> REST
@@ -42,11 +44,13 @@ graph TD
     REST --> INGEST
     REST --> SEARCH
     INGEST --> STORE
+    INGEST --> PGSTORE
     INGEST --> EXTRACT
     INGEST --> CHUNK
     INGEST --> EMBED
     SEARCH --> EMBED
     SEARCH --> STORE
+    SEARCH --> PGSTORE
 ```
 
 `types.ts` est le noyau partagé : les interfaces `Store`, `ChunkRecord`, `KbInfo`, `DocInfo`, etc. sont importées par toutes les couches. `testing/helpers.ts` regroupe les utilitaires de test (stub store, mock embeddings, serveur HTTP).
@@ -95,6 +99,39 @@ fts_chunks (VIRTUAL fts5: content, metadata UNINDEXED, tokenize='porter unicode6
 ```
 
 **Astuce FTS5 (importante)** : `insertChunk` écrit `fts_chunks (rowid, content, metadata)` avec `rowid == chunks.id`. Ce couplage aligne les rangées virtuelles sur celles de `chunks`, ce qui rend la purge supprimer (delete, purgeKB, cleanup) idempotente — plus d'orphelins FTS5. La suppression passe par `DELETE FROM fts_chunks WHERE rowid = ?` avant chaque suppression de chunk.
+
+## Backends pluggables
+
+`storeFactory.ts` sélectionne le backend selon `STORE_BACKEND`. Le reste du
+code ne voit que l'interface `Store` :
+
+```
+ingest.ts / search.ts / transport/
+        ↓
+    Store interface (18 méthodes async)
+        ↓
+    storeFactory.ts → STORE_BACKEND=sqlite   → store.ts    (better-sqlite3 + FTS5)
+                    → STORE_BACKEND=postgres → pgStore.ts  (pg + pgvector)
+```
+
+### PostgreSQL + pgvector
+
+- Schéma identique en noms/colonnes à SQLite. Deux différences :
+  - `embedding` est une colonne `vector(N)` (sizing via `EMBEDDINGS_DIMENSION`)
+    au lieu d'un BLOB. Conversion à la frontière en `Buffer` Float32, transparente
+    pour le reste du code.
+  - FTS via une colonne générée `tsv tsvector` + index GIN, classée par
+    `ts_rank()` / `to_tsquery()` au lieu de FTS5.
+- La migration est idempotente (`CREATE EXTENSION IF NOT EXISTS vector`,
+  `CREATE TABLE IF NOT EXISTS`) et s'exécute à la première connexion.
+- Recherche hybride : pour la Phase 2, `getAllChunks()` + cosine en JS est
+  conservé (même comportement que SQLite). La recherche vectorielle native
+  pgvector (`<=>`, `LIMIT k`) est une optimisation future possible.
+- La signature `searchFts(words: string[])` abstrait la syntaxe full-text :
+  chaque backend construit sa requête native (`"w1" AND "w2"` FTS5 vs
+  `to_tsquery('w1 & w2')`).
+- Tests : `src/e2e/pgstore.e2e.test.ts` contre un vrai pgvector
+  (`docker compose up -d postgres`), avec skip gracieux si le serveur est absent.
 
 ## Recherche hybride
 

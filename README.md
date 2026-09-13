@@ -2,7 +2,7 @@
 
 **Self-hosted RAG that speaks MCP. Drop folders, get a knowledge base. Zero infrastructure.**
 
-Drop documents into folders → each folder becomes a named knowledge base → search them from any MCP-compatible agent (Claude Code, OpenCode, Cline…) or over a tiny REST API. Your data stays on your machine — there's no vector database to run.
+Drop documents into folders → each folder becomes a named knowledge base → search them from any MCP-compatible agent (Claude Code, OpenCode, Cline…) or over a tiny REST API. Your data stays on your machine — there's no vector database to run. A PostgreSQL + pgvector backend is also available as an opt-in for server-side deployments.
 
 [![CI](https://github.com/openhoat/rag-hub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/openhoat/rag-hub-mcp/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -18,17 +18,17 @@ Drop documents into folders → each folder becomes a named knowledge base → s
 Most RAG setups need a vector database, a chunking pipeline, an embeddings service and glue code. `rag-hub-mcp` collapses all of that into one process:
 
 - **Folders are knowledge bases** — a 1st-level folder is a KB, named after the folder. No schema, no UI.
-- **Zero infrastructure** — one SQLite database with FTS5. No vector DB, no server to keep running.
+- **Zero infrastructure** — one SQLite database with FTS5 by default. No vector DB, no server to keep running. (Optional PostgreSQL + pgvector backend for server-side deployments.)
 - **MCP-native** — 8 tools over the Model Context Protocol, so any agent can use it in seconds.
-- **Hybrid search** — vector cosine similarity fused with SQLite FTS5 keyword search.
+- **Hybrid search** — vector cosine similarity fused with full-text keyword search (SQLite FTS5 or PostgreSQL `ts_rank`).
 
 ## How it works
 
 ```mermaid
 graph TD
     KBS["./kbs/ — folders = knowledge bases"] -->|scan SHA-256 diff| PROC["extract → chunk → embed<br/>bge-m3 / any OpenAI-compatible API"]
-    PROC --> DB[("SQLite + FTS5<br/>vectors + full-text index")]
-    DB --> SRCH["hybrid score<br/>cosine 0.65 + FTS5 0.35"]
+    PROC --> DB[("SQLite + FTS5<br/>or PostgreSQL + pgvector")]
+    DB --> SRCH["hybrid score<br/>cosine 0.65 + FTS 0.35"]
     SRCH --> MCP["MCP tools<br/>stdio / http"]
     SRCH --> REST["REST API<br/>/search"]
 ```
@@ -125,7 +125,7 @@ Set via environment variables (`MCP_API_KEY`, `EMBEDDINGS_BASE_URL`, `EMBEDDINGS
 
 - Streaming search results over MCP
 - Web UI dashboard (stats, documents, live search)
-- Pluggable vector backends (pgvector, Qdrant)
+- Native pgvector similarity search in the PostgreSQL backend (`<=>` / `LIMIT k`)
 - Multi-tenant / shared deployments
 - Reranking of hybrid results
 

@@ -9,7 +9,7 @@ import type { Store } from '../types.js'
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
 
-const RAG_VERSION = env.RAG_VERSION
+const VERSION = env.VERSION
 
 const kbArgs = { kb: z.string().describe('Knowledge base name') }
 const searchArgs = {
@@ -46,7 +46,7 @@ const readArgs = {
 }
 
 export const createMcpServer = (store: Store): McpServer => {
-  const server = new McpServer({ name: 'rag-hub-mcp', version: RAG_VERSION }, { capabilities: { tools: {} } })
+  const server = new McpServer({ name: 'rag-hub-mcp', version: VERSION }, { capabilities: { tools: {} } })
 
   server.registerTool('rag_list_kbs', { description: 'List available knowledge bases with stats' }, async () =>
     handleToolCall(store, 'rag_list_kbs', {}),

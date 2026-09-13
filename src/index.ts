@@ -7,7 +7,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { env, isHttpMode, requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
 import { SessionRegistry } from './core/sessionRegistry.js'
-import { createStore } from './core/store.js'
+import { createStore } from './core/storeFactory.js'
 import { getLogger } from './log.js'
 import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
 import { createRestApp } from './transport/rest.js'
@@ -74,7 +74,6 @@ const handleNewSession = async (
 
 const main = async (): Promise<void> => {
   const PORT = env.PORT
-  const DB_PATH = env.DB_PATH
   const SCAN_INTERVAL = env.SCAN_INTERVAL
   const MCP_API_KEY = env.MCP_API_KEY
   // Session lifecycle bounds (HTTP mode only). TTL seconds = idle cutoff: a
@@ -93,9 +92,9 @@ const main = async (): Promise<void> => {
     process.exit(1)
   }
 
-  logger.info(`rag-hub-mcp v${env.RAG_VERSION} starting (${isHttpMode ? 'http' : 'stdio'})...`)
+  logger.info(`rag-hub-mcp v${env.VERSION} starting (${isHttpMode ? 'http' : 'stdio'})...`)
 
-  const store = createStore(DB_PATH)
+  const store = await createStore()
   logger.info('store initialized')
 
   // Initial scan
@@ -184,7 +183,7 @@ const registerMcpEndpoints = async (
   app.get('/mcp', (_request, reply) => {
     reply.send({
       name: 'rag-hub-mcp',
-      version: env.RAG_VERSION,
+      version: env.VERSION,
       tools: [
         'rag_list_kbs',
         'rag_list_documents',

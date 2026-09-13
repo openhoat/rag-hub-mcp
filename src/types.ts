@@ -13,7 +13,7 @@ export interface ChunkRecord {
   chunkIndex: number
   content: string
   metadata: string
-  embedding: Buffer | null
+  embedding: Float32Array | null
 }
 
 export interface KbInfo {
@@ -50,7 +50,8 @@ export interface KnownFileRow {
 
 export interface FtsRow {
   id: number
-  rank: number
+  /** Positive keyword relevance in [0, 1]. Backend-neutral — no raw rank, no sign convention. */
+  score: number
 }
 
 export interface Store {
@@ -72,7 +73,7 @@ export interface Store {
   listAllKbs(): Promise<{ id: number; name: string }[]>
   getKbName(kbId: number): Promise<string>
   listKnownFiles(): Promise<KnownFileRow[]>
-  searchFts(matchQuery: string): Promise<FtsRow[] | null>
+  searchFts(words: string[]): Promise<FtsRow[] | null>
 }
 
 export interface IngestResult {

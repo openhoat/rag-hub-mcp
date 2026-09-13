@@ -3,7 +3,7 @@ import type { Server as HttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createStore } from '../core/store.js'
+import { createSqliteStore } from '../core/store.js'
 import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
 import { createRestApp } from '../transport/rest.js'
 import type { Store } from '../types.js'
@@ -21,7 +21,7 @@ describe('REST API (real store + ingest + search)', () => {
   beforeEach(async () => {
     restoreFetch = stubEmbeddingsApi(texts => texts.map(() => unitEmbeddings(4)))
     root = mkdtempSync(join(tmpdir(), 'rag-rest-'))
-    store = createStore(join(root, 'rag.db'))
+    store = createSqliteStore(join(root, 'rag.db'))
     const started = await startHttpServer(await createRestApp(store))
     server = started.server
     base = started.base
