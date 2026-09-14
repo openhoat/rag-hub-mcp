@@ -1,32 +1,32 @@
 # Architecture
 
-`rag-hub-mcp` est un process unique : il surveille un dossier racine, ingère les documents dans un index local (SQLite par défaut), et les expose via MCP et REST. Deux backends de stockage implémentent la même interface `Store` — SQLite/FTS5 (par défaut, autonome) et PostgreSQL + pgvector (opt-in).
+`rag-hub-mcp` is a single process: it watches a root folder, ingests documents into a local index (SQLite by default), and exposes them via MCP and REST. Two storage backends implement the same `Store` interface — SQLite/FTS5 (default, self-contained) and PostgreSQL + pgvector (opt-in).
 
-## Vue en couches
+## Layer view
 
-Le code source (`src/`) est organisé en quatre couches, dépendances pointées vers le bas :
+Source code (`src/`) is organized into four layers, with dependencies pointing downward:
 
 ```mermaid
 graph TD
     subgraph BOOT["bootstrap"]
-        INDEX["index.ts<br/>choix transport, init, scan"]
+        INDEX["index.ts<br/>transport selection, init, scan"]
         LOG["log.ts"]
     end
 
-    subgraph TRANSPORT["transport — protocoles"]
+    subgraph TRANSPORT["transport — protocols"]
         MCP["mcp.ts<br/>9 tools, zod, streamable-http"]
         REST["rest.ts<br/>Fastify /health /admin /search"]
     end
 
-    subgraph CORE["core — logique métier"]
-        FACTORY["storeFactory.ts<br/>choix backend (sqlite | postgres)"]
+    subgraph CORE["core — business logic"]
+        FACTORY["storeFactory.ts<br/>backend selection (sqlite | postgres)"]
         STORE["store.ts<br/>SQLite + FTS5"]
         PGSTORE["pgStore.ts<br/>PostgreSQL + pgvector"]
-        INGEST["ingest.ts<br/>scan + indexation"]
-        SEARCH["search.ts<br/>recherche hybride"]
+        INGEST["ingest.ts<br/>scan + indexing"]
+        SEARCH["search.ts<br/>hybrid search"]
     end
 
-    subgraph PIPELINE["pipeline — traitement texte"]
+    subgraph PIPELINE["pipeline — text processing"]
         EXTRACT["extract.ts"]
         CHUNK["chunk.ts"]
         EMBED["embed.ts"]
@@ -53,41 +53,41 @@ graph TD
     SEARCH --> PGSTORE
 ```
 
-`types.ts` est le noyau partagé : les interfaces `Store`, `ChunkRecord`, `KbInfo`, `DocInfo`, etc. sont importées par toutes les couches. `testing/helpers.ts` regroupe les utilitaires de test (stub store, mock embeddings, serveur HTTP).
+`types.ts` is the shared kernel: the `Store`, `ChunkRecord`, `KbInfo`, `DocInfo` interfaces, etc., are imported by every layer. `testing/helpers.ts` groups test utilities (stub store, mock embeddings, HTTP server).
 
-## Flux d'indexation
+## Indexing flow
 
 ```mermaid
 graph LR
-    F["/kbs — 1 dossier = 1 KB<br/>KB_ROOT"] -->|scan périodique| GLOB["fast-glob **/*<br/>ignores .git, node_modules…"]
+    F["/kbs — 1 folder = 1 KB<br/>KB_ROOT"] -->|periodic scan| GLOB["fast-glob **/*<br/>ignores .git, node_modules…"]
     GLOB --> STAT["stat + SHA-256 diff"]
-    STAT -->|inchangé| SKIP["skip"]
-    STAT -->|modifié| RE["delete chunks<br/>-> re-index"]
-    STAT -->|nouveau| EXTR["extract.ts"]
+    STAT -->|unchanged| SKIP["skip"]
+    STAT -->|modified| RE["delete chunks<br/>-> re-index"]
+    STAT -->|new| EXTR["extract.ts"]
     EXTR --> CH["chunk.ts<br/>max 3200, overlap 400, headings"]
     CH --> EMB["embed.ts<br/>batch 16 / OpenAI-compatible"]
     EMB --> DB[("SQLite<br/>kbs · files · chunks · fts_chunks")]
 ```
 
-- La racine `KB_ROOT` est scannée au démarrage puis périodiquement (`SCAN_INTERVAL`, mode HTTP uniquement).
-- Les sous-dossiers de premier niveau sont des KB, nommés d'après le dossier.
-- Chaque fichier est haché (SHA-256) : seuls les fichiers nouveaux ou modifiés sont ré-encodés.
-- Les fichiers supprimés et les KB orphelines sont purgés de l'index (`cleanupStale`).
+- The `KB_ROOT` folder is scanned at startup, then periodically (`SCAN_INTERVAL`, HTTP mode only).
+- Top-level subfolders are KBs, named after the folder.
+- Each file is hashed (SHA-256): only new or modified files are re-encoded.
+- Deleted files and orphaned KBs are purged from the index (`cleanupStale`).
 
-### Décision skip / modify / add
+### Skip / modify / add decision
 
-`scanKb` compare chaque fichier à ce qu'il a en base :
+`scanKb` compares each file against what is stored in the database:
 
-| Cas | Condition | Action |
+| Case | Condition | Action |
 |---|---|---|
-| inchangé | même `mtime` + même taille | `skipped++` |
-| même contenu | même SHA-256 (mtime changé) | met à jour `mtime` seul, `skipped++` |
-| modifié | SHA-256 différent | purge chunks, re-index, `modified++` |
-| nouveau | absent en base | purge fichier stale éventuel, indexe, `added++` |
+| unchanged | same `mtime` + same size | `skipped++` |
+| same content | same SHA-256 (mtime changed) | update `mtime` only, `skipped++` |
+| modified | different SHA-256 | purge chunks, re-index, `modified++` |
+| new | absent from database | purge any stale file, index, `added++` |
 
-## Schéma SQLite
+## SQLite schema
 
-Quatre tables, deux relations par contrainte `ON DELETE CASCADE`, index FTS5 virtuel.
+Four tables, two relationships via the `ON DELETE CASCADE` constraint, virtual FTS5 index.
 
 ```sql
 kbs        (id PK, name UNIQUE)
@@ -98,17 +98,17 @@ chunks     (id PK, file_id FK→files ON DELETE CASCADE, chunk_index,
 fts_chunks (VIRTUAL fts5: content, metadata UNINDEXED, tokenize='porter unicode61')
 ```
 
-**Astuce FTS5 (importante)** : `insertChunk` écrit `fts_chunks (rowid, content, metadata)` avec `rowid == chunks.id`. Ce couplage aligne les rangées virtuelles sur celles de `chunks`, ce qui rend la purge supprimer (delete, purgeKB, cleanup) idempotente — plus d'orphelins FTS5. La suppression passe par `DELETE FROM fts_chunks WHERE rowid = ?` avant chaque suppression de chunk.
+**Important FTS5 trick**: `insertChunk` writes `fts_chunks (rowid, content, metadata)` with `rowid == chunks.id`. This coupling aligns the virtual rows on those of `chunks`, which makes purge and deletion (delete, purgeKB, cleanup) idempotent — no more FTS5 orphans. Deletion goes through `DELETE FROM fts_chunks WHERE rowid = ?` before each chunk deletion.
 
-## Backends pluggables
+## Pluggable backends
 
-`storeFactory.ts` sélectionne le backend selon `STORE_BACKEND`. Le reste du
-code ne voit que l'interface `Store` :
+`storeFactory.ts` selects the backend according to `STORE_BACKEND`. The rest of the
+code only sees the `Store` interface:
 
 ```
 ingest.ts / search.ts / transport/
         ↓
-    Store interface (18 méthodes async)
+    Store interface (18 async methods)
         ↓
     storeFactory.ts → STORE_BACKEND=sqlite   → store.ts    (better-sqlite3 + FTS5)
                     → STORE_BACKEND=postgres → pgStore.ts  (pg + pgvector)
@@ -116,25 +116,25 @@ ingest.ts / search.ts / transport/
 
 ### PostgreSQL + pgvector
 
-- Schéma identique en noms/colonnes à SQLite. Deux différences :
-  - `embedding` est une colonne `vector(N)` (sizing via `EMBEDDINGS_DIMENSION`)
-    au lieu d'un BLOB. Conversion à la frontière en `Buffer` Float32, transparente
-    pour le reste du code.
-  - FTS via une colonne générée `tsv tsvector` + index GIN, classée par
-    `ts_rank()` / `to_tsquery()` au lieu de FTS5.
-- La migration est idempotente (`CREATE EXTENSION IF NOT EXISTS vector`,
-  `CREATE TABLE IF NOT EXISTS`) et s'exécute à la première connexion.
-- Recherche hybride : pour la Phase 2, `getAllChunks()` + cosine en JS est
-  conservé (même comportement que SQLite). La recherche vectorielle native
-  pgvector (`<=>`, `LIMIT k`) est une optimisation future possible.
-- La signature `searchFts(words: string[])` abstrait la syntaxe full-text :
-  chaque backend construit sa requête native (`"w1" AND "w2"` FTS5 vs
+- Schema identical in names/columns to SQLite. Two differences:
+  - `embedding` is a `vector(N)` column (sized via `EMBEDDINGS_DIMENSION`)
+    instead of a BLOB. Conversion happens at the boundary in `Buffer` Float32, transparent
+    for the rest of the code.
+  - FTS through a generated `tsv tsvector` column + GIN index, ranked via
+    `ts_rank()` / `to_tsquery()` instead of FTS5.
+- The migration is idempotent (`CREATE EXTENSION IF NOT EXISTS vector`,
+  `CREATE TABLE IF NOT EXISTS`) and runs on first connection.
+- Hybrid search: for Phase 2, `getAllChunks()` + JS cosine is
+  kept (same behavior as SQLite). Native pgvector vector search
+  (`<=>`, `LIMIT k`) is a possible future optimization.
+- The `searchFts(words: string[])` signature abstracts the full-text syntax:
+  each backend builds its native query (`"w1" AND "w2"` FTS5 vs
   `to_tsquery('w1 & w2')`).
-- Tests : `src/e2e/pgstore.e2e.test.ts` contre un véritable moteur Postgres compilé
-  en WASM (**PGlite** + extension pgvector), instancié en mémoire pour la durée
-  des tests — aucun serveur, aucun docker, distinct de la base de production.
+- Tests: `src/e2e/pgstore.e2e.test.ts` against a real Postgres engine compiled
+  in WASM (**PGlite** + pgvector extension), instantiated in memory for the duration
+  of the tests — no server, no docker, separate from the production database.
 
-## Recherche hybride
+## Hybrid search
 
 ```mermaid
 graph LR
@@ -144,39 +144,39 @@ graph LR
     FTS --> KW["rank → 1/(1+|rank|)"]
     VEC --> SCORE[("0.65 · vec + 0.35 · kw")]
     KW --> SCORE
-    SCORE --> TOP["topK par score<br/>content tronqué à 1000"]
+    SCORE --> TOP["topK by score<br/>content truncated to 1000"]
 ```
 
-- **Vector** : similarité cosinus entre l'embedding de la requête et chaque chunk, pondérée 0.65, seuil minimal 0.08.
-- **Keyword** : scores FTS5 pondérés 0.35. La requête MATCH est construite en `'"word1" AND "word2"'` sur les mots de plus de 2 caractères.
-- **Fallback** : si l'embedding échoue ou FTS5 est indisponible, on retombe sur une correspondance `indexOf` par mot.
-- Le filtre KB est appliqué via `getAllChunks(kb)` ; le score fusionné trie et retourne les `topK` résultats avec leurs citations (`kb`, `relPath`, `chunkIndex`).
+- **Vector**: cosine similarity between the query embedding and each chunk, weighted 0.65, minimum threshold 0.08.
+- **Keyword**: FTS5 scores weighted 0.35. The MATCH query is built as `'"word1" AND "word2"'` over words longer than 2 characters.
+- **Fallback**: if embedding fails or FTS5 is unavailable, it falls back to a per-word `indexOf` match.
+- The KB filter is applied via `getAllChunks(kb)`; the merged score sorts and returns the `topK` results with their citations (`kb`, `relPath`, `chunkIndex`).
 
-## Modèles de transport
+## Transport models
 
-| | stdio (défaut) | HTTP (`--http`) |
+| | stdio (default) | HTTP (`--http`) |
 |---|---|---|
-| Connexion | `StdioServerTransport` sur stdin/stdout | `StreamableHTTPServerTransport` (streamable-http) |
-| Scan | initial one-shot | initial + périodique (`SCAN_INTERVAL`) |
-| Sessions MCP | une, unique | une par client : `Map<sessionId, {server, transport}>` |
-| REST | non | oui (`/health`, `/admin/*`, `/search`) |
+| Connection | `StdioServerTransport` over stdin/stdout | `StreamableHTTPServerTransport` (streamable-http) |
+| Scan | initial one-shot | initial + periodic (`SCAN_INTERVAL`) |
+| MCP sessions | one, unique | one per client: `Map<sessionId, {server, transport}>` |
+| REST | no | yes (`/health`, `/admin/*`, `/search`) |
 | Logs | → stderr (stdout = JSON-RPC) | → stdout |
 
-En HTTP, chaque client MCP reçoit **sa propre paire** `McpServer` + `StreamableHTTPServerTransport`, identifiée par un `Mcp-Session-Id` (UUID). Un POST `/mcp` sans session crée un transport dédié ; les appels suivants réutilisent ce transport via l'en-tête de session. Ceci évite l'erreur *« Server already initialized »* sur les clients concurrents. `GET /mcp` expose la liste des 9 tools (utile pour l'inspecteur MCP).
+In HTTP, each MCP client gets **its own** `McpServer` + `StreamableHTTPServerTransport` pair, identified by a `Mcp-Session-Id` (UUID). A POST `/mcp` without a session creates a dedicated transport; subsequent calls reuse this transport via the session header. This avoids the *"Server already initialized"* error on concurrent clients. `GET /mcp` exposes the list of the 9 tools (useful for the MCP inspector).
 
-Le SDK MCP reçoit les objets Node natifs `IncomingMessage`/`ServerResponse` de Fastify : `transport.handleRequest(request.raw, reply.raw, request.body)`. En Fastify, on utilise `reply.hijack()` pour reprendre la main sur la réponse brute avant de passer `reply.raw` au SDK : `reply.hijack()` transfère le cycle de vie de la réponse à l'appelant, et le SDK écrit directement (SSE + JSON-RPC) sur la réponse Node brute.
+The MCP SDK receives Fastify's native Node objects `IncomingMessage`/`ServerResponse`: `transport.handleRequest(request.raw, reply.raw, request.body)`. In Fastify, `reply.hijack()` is used to take back control of the raw response before passing `reply.raw` to the SDK: `reply.hijack()` transfers the response lifecycle to the caller, and the SDK writes directly (SSE + JSON-RPC) on the raw Node response.
 
-## Résolution de configuration
+## Configuration resolution
 
-L'ordre d'import dans `index.ts` est critique :
+The import order in `index.ts` is critical:
 
-1. `config.ts` parse l'environnement à l'import (schéma Zod, fail-fast) et calcule les défauts `KB_ROOT` / `DB_PATH` selon le transport (cwd relatif en stdio, chemins conteneur en HTTP).
-2. `ingest.ts` lit `KB_ROOT` au chargement du module ; comme `config.ts` est importé avant lui, la valeur est déjà figée.
+1. `config.ts` parses the environment on import (Zod schema, fail-fast) and computes the `KB_ROOT` / `DB_PATH` defaults according to the transport (cwd-relative in stdio, container paths in HTTP).
+2. `ingest.ts` reads `KB_ROOT` on module load; since `config.ts` is imported before it, the value is already pinned.
 
-En mode stdio, les défauts sont relatifs au cwd (`./kbs`, `./rag.db`) ; en mode HTTP on garde les chemins conteneur (`/data/kbs`, `/data/index/rag.db`).
+In stdio mode, defaults are relative to the cwd (`./kbs`, `./rag.db`); in HTTP mode the container paths are kept (`/data/kbs`, `/data/index/rag.db`).
 
 ## Testing
 
-- **Unit** (`src/**/*.unit.test.ts`) : pur et rapide, dépendances mockées. L'endpoint `/embeddings` est mocké via `stubEmbeddingsApi` (intercepte `fetch` global pour ce seul chemin).
-- **E2E** (`src/e2e/**/*.e2e.test.ts`) : vrai disque + SQLite + HTTP.
-- Piège `KB_ROOT` : `ingest.ts` lit `KB_ROOT` au chargement du module → `vitest.setup.ts` le fixe sur un tmpdir partagé. Les tests qui déposent des fichiers écrivent dans ce `KB_ROOT` avec des noms de KB uniques.
+- **Unit** (`src/**/*.unit.test.ts`): pure and fast, mocked dependencies. The `/embeddings` endpoint is mocked via `stubEmbeddingsApi` (intercepts global `fetch` for this single path).
+- **E2E** (`src/e2e/**/*.e2e.test.ts`): real disk + SQLite + HTTP.
+- `KB_ROOT` trap: `ingest.ts` reads `KB_ROOT` on module load → `vitest.setup.ts` pins it to a shared tmpdir. Tests that drop files write into this `KB_ROOT` with unique KB names.
