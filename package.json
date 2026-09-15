@@ -36,7 +36,6 @@
     "changelog": "node scripts/changelog.mjs",
     "clean": "rimraf dist",
     "clean:wireit": "rimraf .wireit",
-    "coverage": "wireit",
     "qa": "wireit",
     "qa:fix": "biome check --write src/",
     "sonar": "wireit",
@@ -45,6 +44,7 @@
     "start:docs": "vitepress dev docs",
     "start:inspector": "npx @modelcontextprotocol/inspector npm run start:dev",
     "test": "wireit",
+    "test:coverage": "wireit",
     "test:e2e": "wireit",
     "test:unit": "wireit",
     "typecheck": "wireit",
@@ -120,17 +120,6 @@
       "command": "rimraf dist",
       "output": []
     },
-    "coverage": {
-      "command": "vitest run --coverage",
-      "files": [
-        "src/**/*.ts",
-        "vitest.config.ts",
-        "vitest.setup.ts"
-      ],
-      "output": [
-        "dist/coverage/**"
-      ]
-    },
     "qa": {
       "command": "biome check src/",
       "dependencies": [
@@ -146,7 +135,7 @@
     "sonar": {
       "command": "sonar-scanner-npm",
       "dependencies": [
-        "coverage"
+        "test:coverage"
       ]
     },
     "test": {
@@ -157,6 +146,17 @@
         "vitest.setup.ts"
       ],
       "output": []
+    },
+    "test:coverage": {
+      "command": "vitest run --coverage",
+      "files": [
+        "src/**/*.ts",
+        "vitest.config.ts",
+        "vitest.setup.ts"
+      ],
+      "output": [
+        "dist/coverage/**"
+      ]
     },
     "test:e2e": {
       "command": "vitest run --project e2e",

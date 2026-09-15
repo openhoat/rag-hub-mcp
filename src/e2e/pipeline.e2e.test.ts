@@ -38,7 +38,7 @@ describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> s
     expect(result.added).toBe(2)
 
     const kbs = await store.listKbs()
-    expect(kbs.length).toBe(1)
+    expect(kbs).toHaveLength(1)
     expect(kbs[0].name).toBe('kb1')
     expect(kbs[0].docCount).toBe(2)
 
@@ -67,7 +67,7 @@ describe('full pipeline: disk -> scan -> extract -> chunk -> embed -> index -> s
     await deleteDocument(store, 'kb1', 'a.md', root)
 
     const found = await search(store, { query: 'content', kb: 'kb1', topK: 5 })
-    expect(found.length).toBe(0)
+    expect(found).toHaveLength(0)
   })
 
   test('should return the correct chunk for a long document', async () => {
