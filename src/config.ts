@@ -31,7 +31,7 @@ const EnvSchema = z.object({
   SCAN_INTERVAL: z.coerce.number().int().min(0).default(300),
   PORT: z.coerce.number().int().min(1).max(65535).default(8000),
   CORS_ORIGINS: z.string().default(''),
-  VERSION: z.string().default('1.0.0'),
+  VERSION: z.string().default('1.1.0'),
   RAG_TRANSPORT: z.enum(['stdio', 'http']).optional(),
   LOG_LEVEL: z.string().default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
