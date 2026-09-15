@@ -14,6 +14,7 @@ const EnvSchema = z.object({
   EMBEDDINGS_API_KEY: z.string().default(''),
   EMBEDDINGS_MODEL: z.string().default('bge-m3'),
   EMBEDDINGS_DIMENSION: z.coerce.number().int().min(1).default(1024),
+  CHUNK_MAX_CHARS: z.coerce.number().int().min(1).default(3200),
   STORE_BACKEND: z.enum(['sqlite', 'postgres']).default('sqlite'),
   DATABASE_URL: z.string().optional(),
   PG_HOST: z.string().optional(),

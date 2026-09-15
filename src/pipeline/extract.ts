@@ -5,8 +5,9 @@ import type { ExtractResult } from '../types.js'
 
 const logger = getLogger('extract')
 
-/** Strip NUL bytes, which PostgreSQL rejects in TEXT columns (SQLite tolerates them). */
-const sanitizeText = (text: string): string => text.replaceAll('\0', '')
+/** Strip NUL bytes (PostgreSQL rejects them in TEXT) and normalize CRLF/CR
+ * line endings to LF so downstream chunking and parsing split on \n reliably. */
+const sanitizeText = (text: string): string => text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').replaceAll('\0', '')
 
 export const extractText = async (filePath: string): Promise<ExtractResult> => {
   const ext = extname(filePath).toLowerCase()

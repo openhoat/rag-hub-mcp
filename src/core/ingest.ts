@@ -173,7 +173,15 @@ export const indexFile = async (
   try {
     embeddings = await embedTexts(texts)
   } catch (err) {
-    logger.error('embed failed, storing without vectors', err)
+    logger.warn('embed batch failed, retrying per-chunk', err)
+    for (let i = 0; i < texts.length; i++) {
+      try {
+        const [emb] = await embedTexts([texts[i]])
+        embeddings[i] = emb
+      } catch (perChunkErr) {
+        logger.warn('embed failed for chunk %d, storing without vector', i, perChunkErr)
+      }
+    }
   }
 
   for (let i = 0; i < chunks.length; i++) {

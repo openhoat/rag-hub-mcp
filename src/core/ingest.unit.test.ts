@@ -15,7 +15,9 @@ vi.mock('../pipeline/extract.js', () => ({
   TEXT_EXTENSIONS: new Set(['.md']),
 }))
 
-import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from './ingest.js'
+import { embedTexts } from '../pipeline/embed.js'
+import { extractText } from '../pipeline/extract.js'
+import { addDocument, deleteDocument, deleteKb, indexFile, readDocument, scanAll } from './ingest.js'
 
 let root: string
 let store: Store
@@ -33,6 +35,40 @@ afterEach(async () => {
   vi.clearAllMocks()
   if (root) rmSync(root, { recursive: true, force: true })
   if (store) await store.close()
+})
+
+describe('indexFile', () => {
+  test('should retry per-chunk when the batch embedding call fails', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), 'unused', 'utf-8')
+    await store.addKb('docs')
+    const kbId = await store.getKbId('docs')
+
+    // Three long paragraphs so the chunker yields multiple chunks (batch > 1).
+    // mockImplementationOnce: affects only this call, does not leak to other tests.
+    const paragraph = 'para content filler '.repeat(150) // ~2400 chars, forces splitting
+    vi.mocked(extractText).mockImplementationOnce(async () => ({
+      text: Array.from({ length: 3 }, () => paragraph).join('\n\n'),
+      frontmatter: null,
+    }))
+
+    // Batch call (multiple texts) fails like an HTTP 400 on one oversized chunk.
+    const batch = vi.mocked(embedTexts).mockImplementationOnce(async texts => {
+      if (texts.length > 1) throw new Error('embeddings API error 400')
+      return texts.map(() => new Float32Array([0.5, 0.5]))
+    })
+
+    await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', { mtimeMs: 0, size: 40 })
+
+    expect(batch).toHaveBeenCalled()
+    // The failed batch was followed by per-chunk retries, so at least one
+    // chunk keeps a vector instead of dropping vectors for the whole file.
+    const chunks = await store.getAllChunks('docs')
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.some(c => c.embedding !== null)).toBe(true)
+  })
 })
 
 describe('scanAll', () => {

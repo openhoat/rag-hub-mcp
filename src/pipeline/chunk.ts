@@ -1,3 +1,5 @@
+import { env } from '../config.js'
+
 interface Chunk {
   content: string
   metadata: string
@@ -8,17 +10,22 @@ interface Paragraph {
   headingPath: string
 }
 
-const MAX_CHARS = 3200
 const OVERLAP_CHARS = 400
 
-export const chunkText = (text: string, relPath: string, kb: string, frontmatter: Record<string, string> | null = null): Chunk[] => {
+export const chunkText = (
+  text: string,
+  relPath: string,
+  kb: string,
+  frontmatter: Record<string, string> | null = null,
+  maxChars: number = env.CHUNK_MAX_CHARS,
+): Chunk[] => {
   const paragraphs = splitParagraphs(text)
   const chunks: { content: string; metadata: string }[] = []
   let buffer: Paragraph[] = []
   let bufLen = 0
 
   for (const para of paragraphs) {
-    if (bufLen + para.text.length > MAX_CHARS && buffer.length > 0) {
+    if (bufLen + para.text.length > maxChars && buffer.length > 0) {
       chunks.push(buildChunk(buffer, relPath, kb))
       const overlap = drainOverlap(buffer, OVERLAP_CHARS)
       buffer = overlap
@@ -74,8 +81,9 @@ const buildChunk = (lines: Paragraph[], relPath: string, kb: string) => {
 const splitParagraphs = (text: string): Paragraph[] => {
   const headings: string[] = []
   const result: Paragraph[] = []
+  const normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
 
-  for (const raw of text.split(/\n\n+/)) {
+  for (const raw of normalized.split(/\n\n+/)) {
     const line = raw.trim()
     if (!line) continue
 
