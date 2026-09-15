@@ -83,4 +83,15 @@ describe('config', () => {
     const { corsOrigins } = await importConfig()
     expect(corsOrigins).toEqual(['https://a.com', 'https://b.io'])
   })
+
+  test('extraTextExtensions parses a comma-separated string into a normalized set', async () => {
+    process.env.TEXT_EXTENSIONS = ' .kt, .Java , ,go '
+    const { extraTextExtensions } = await importConfig()
+    expect([...extraTextExtensions]).toEqual(['.kt', '.java', '.go'])
+  })
+
+  test('extraTextExtensions defaults to an empty set', async () => {
+    const { extraTextExtensions } = await importConfig()
+    expect(extraTextExtensions.size).toBe(0)
+  })
 })

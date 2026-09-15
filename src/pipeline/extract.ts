@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
+import { extraTextExtensions } from '../config.js'
 import { getLogger } from '../log.js'
 import type { ExtractResult } from '../types.js'
 
@@ -13,6 +14,18 @@ export const extractText = async (filePath: string): Promise<ExtractResult> => {
   const ext = extname(filePath).toLowerCase()
   const result = await extractByExt(ext, filePath)
   return { ...result, text: sanitizeText(result.text), frontmatter: result.frontmatter }
+}
+
+/** Bytes sampled from the head of a file to decide text vs binary. */
+const BINARY_SAMPLE_SIZE = 8192
+
+/** Detect binary content from the first sample: NUL bytes or invalid UTF-8
+ * indicate binary. Used as a fallback for extensions outside the built-in list. */
+const isBinaryContent = (buf: Buffer): boolean => {
+  const sample = buf.subarray(0, BINARY_SAMPLE_SIZE)
+  if (sample.includes(0)) return true
+  const decoded = sample.toString('utf-8')
+  return Buffer.from(decoded, 'utf-8').toString('hex') !== sample.toString('hex')
 }
 
 const extractByExt = async (ext: string, filePath: string): Promise<ExtractResult> => {
@@ -31,6 +44,8 @@ const extractByExt = async (ext: string, filePath: string): Promise<ExtractResul
     case '.py':
     case '.rb':
     case '.sh':
+    case '.kt':
+    case '.java':
     case '.yaml':
     case '.yml':
     case '.json':
@@ -51,8 +66,13 @@ const extractByExt = async (ext: string, filePath: string): Promise<ExtractResul
     case '.pptx':
       return await extractPptx(filePath)
 
-    default:
-      return { text: '', frontmatter: null }
+    default: {
+      // Unknown extension: sniff the content so any text format is indexed
+      // (Kotlin, Swift, Go, Rust, shell, config files, ...) without an extractor.
+      const buf = readFileSync(filePath)
+      if (isBinaryContent(buf)) return { text: '', frontmatter: null }
+      return { text: buf.toString('utf-8'), frontmatter: null }
+    }
   }
 }
 
@@ -69,6 +89,8 @@ export const TEXT_EXTENSIONS = new Set([
   '.py',
   '.rb',
   '.sh',
+  '.kt',
+  '.java',
   '.yaml',
   '.yml',
   '.json',
@@ -76,6 +98,11 @@ export const TEXT_EXTENSIONS = new Set([
   '.env',
   '.csv',
 ])
+
+// Merge the built-in list with any extensions configured via TEXT_EXTENSIONS.
+for (const ext of extraTextExtensions) {
+  TEXT_EXTENSIONS.add(ext)
+}
 
 export const isTextFile = (filePath: string): boolean => {
   return TEXT_EXTENSIONS.has(extname(filePath).toLowerCase())
