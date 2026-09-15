@@ -28,9 +28,3 @@
 
 ## In Progress
 
-### #10 [FEAT] Add .kt/.java support + magic bytes text detection (GH issue #8)
-
-- [x] Add `.kt` and `.java` to `extract.ts` switch + `TEXT_EXTENSIONS`
-- [x] Add `TEXT_EXTENSIONS` env var (merged, not replacing) in `config.ts` + `.env.example`
-- [x] Add magic bytes fallback for unknown extensions in `extract.ts`
-- [x] Add unit tests + validation
