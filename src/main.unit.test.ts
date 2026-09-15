@@ -25,7 +25,7 @@ vi.mock('./config.js', () => ({
   requireHttpApiKey: vi.fn((_isHttp: boolean, apiKey: string) => apiKey.trim() !== ''),
 }))
 
-vi.mock('./core/storeFactory.js', () => ({
+vi.mock('./core/store-factory.js', () => ({
   createStore: vi.fn(),
 }))
 
@@ -44,7 +44,7 @@ vi.mock('./transport/rest.js', () => ({
 
 import { requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
-import { createStore } from './core/storeFactory.js'
+import { createStore } from './core/store-factory.js'
 import { makeStubStore } from './test/helpers'
 import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
 import { createRestApp } from './transport/rest.js'
