@@ -8,10 +8,10 @@ const pgMock = vi.hoisted(() => ({ createPgStore: vi.fn() }))
 const sqliteMock = vi.hoisted(() => ({ createSqliteStore: vi.fn() }))
 
 vi.mock('../config.js', () => ({ env: envMock }))
-vi.mock('./pgStore.js', () => pgMock)
+vi.mock('./pg-store.js', () => pgMock)
 vi.mock('./store.js', () => sqliteMock)
 
-const { createStore } = await import('./storeFactory.js')
+const { createStore } = await import('./store-factory.js')
 
 beforeEach(() => {
   vi.clearAllMocks()

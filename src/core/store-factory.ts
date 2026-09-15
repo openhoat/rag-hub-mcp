@@ -1,6 +1,6 @@
 import { env } from '../config.js'
 import type { Store } from '../types.js'
-import { createPgStore } from './pgStore.js'
+import { createPgStore } from './pg-store.js'
 import { createSqliteStore } from './store.js'
 
 /**

@@ -5,7 +5,7 @@ import type { PGliteInterface } from '@electric-sql/pglite'
 import { PGlite } from '@electric-sql/pglite'
 import { vector as pgliteVector } from '@electric-sql/pglite-pgvector'
 import type { FastifyInstance } from 'fastify'
-import { createPgStoreFromDb, type Db } from '../core/pgStore'
+import { createPgStoreFromDb, type Db } from '../core/pg-store'
 import type { ChunkRecord, KbInfo, Store } from '../types'
 
 /**
