@@ -41,9 +41,6 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.ts',
         'src/testing/helpers.ts',
-        'src/index.ts',
-        'src/log.ts',
-        // The store factory is covered by its unit test (src/core/storeFactory.unit.test.ts).
       ],
       reporter: ['text', 'lcov'],
       thresholds: {

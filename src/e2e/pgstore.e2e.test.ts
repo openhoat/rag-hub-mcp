@@ -90,4 +90,41 @@ describe('pgStore (e2e, in-memory PGlite)', () => {
     expect(row?.kbName).toBe('kb')
     expect(await store.getKbName(kbId)).toBe('kb')
   })
+
+  test('should delete a single file', async () => {
+    await store.addKb('kb')
+    const kbId = await store.getKbId('kb')
+    const fileId = await store.upsertFile({ kbId, relPath: 'd.md', sha256: 's', mtime: 1, bytes: 5 })
+    await store.deleteFile(fileId)
+    expect(await store.getFile(kbId, 'd.md')).toBeNull()
+  })
+
+  test('should delete all files of a kb', async () => {
+    await store.addKb('kb')
+    const kbId = await store.getKbId('kb')
+    await store.upsertFile({ kbId, relPath: 'a.md', sha256: 's', mtime: 1, bytes: 5 })
+    await store.upsertFile({ kbId, relPath: 'b.md', sha256: 's', mtime: 1, bytes: 5 })
+    await store.deleteFilesByKb(kbId)
+    expect(await store.listFiles('kb')).toHaveLength(0)
+  })
+
+  test('should update a file mtime', async () => {
+    await store.addKb('kb')
+    const kbId = await store.getKbId('kb')
+    await store.upsertFile({ kbId, relPath: 'u.md', sha256: 's', mtime: 1, bytes: 5 })
+    const known = await store.listKnownFiles()
+    const row = known.find(k => k.relPath === 'u.md')
+    expect(row).toBeTruthy()
+    await store.updateFileMtime(row?.id as number, 99)
+    const updated = await store.getFile(kbId, 'u.md')
+    expect(updated?.mtime).toBe(99)
+  })
+
+  test('should remove a knowledge base', async () => {
+    await store.addKb('tmpkb')
+    const kbId = await store.getKbId('tmpkb')
+    expect(kbId).toBeGreaterThan(0)
+    await store.removeKb('tmpkb')
+    expect(await store.getKbId('tmpkb')).toBe(0)
+  })
 })

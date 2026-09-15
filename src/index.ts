@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { pathToFileURL } from 'node:url'
 import rateLimit from '@fastify/rate-limit'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -22,7 +23,7 @@ const requestAuthenticated = (authHeader: string | undefined): boolean => {
   return !key || authHeader === `Bearer ${key}`
 }
 
-const closeSession = (sessions: SessionRegistry<McpSession>, sessionId: string): void => {
+export const closeSession = (sessions: SessionRegistry<McpSession>, sessionId: string): void => {
   const entry = sessions.get(sessionId)
   if (!entry) return
   sessions.delete(sessionId)
@@ -30,7 +31,7 @@ const closeSession = (sessions: SessionRegistry<McpSession>, sessionId: string):
   logger.info(`MCP session closed: ${sessionId}`)
 }
 
-const handleExistingSession = async (
+export const handleExistingSession = async (
   sessions: SessionRegistry<McpSession>,
   sessionId: string,
   request: FastifyRequest,
@@ -46,7 +47,7 @@ const handleExistingSession = async (
   await entry.value.transport.handleRequest(request.raw, reply.raw, request.body)
 }
 
-const handleNewSession = async (
+export const handleNewSession = async (
   sessions: SessionRegistry<McpSession>,
   store: Store,
   request: FastifyRequest,
@@ -72,7 +73,7 @@ const handleNewSession = async (
   }
 }
 
-const main = async (): Promise<void> => {
+export const main = async (): Promise<void> => {
   const PORT = env.PORT
   const SCAN_INTERVAL = env.SCAN_INTERVAL
   const MCP_API_KEY = env.MCP_API_KEY
@@ -151,7 +152,7 @@ const main = async (): Promise<void> => {
   registerShutdown(store)
 }
 
-const registerMcpEndpoints = async (
+export const registerMcpEndpoints = async (
   app: FastifyInstance,
   sessions: SessionRegistry<McpSession>,
   store: Store,
@@ -210,7 +211,7 @@ const registerMcpEndpoints = async (
   }, 60_000).unref()
 }
 
-const registerShutdown = (store: Store): void => {
+export const registerShutdown = (store: Store): void => {
   const shutdown = (signal: string) => {
     logger.info(`${signal} received, shutting down`)
     void (async () => {
@@ -225,9 +226,23 @@ const registerShutdown = (store: Store): void => {
   process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
-try {
-  await main()
-} catch (err) {
-  logger.error('fatal', err)
-  process.exit(1)
+// Entry guard: bootstrap the server only when this module is executed directly
+// (via `bin`/`node dist/index.js`), not when imported by tests or consumers.
+const isEntryPoint = (): boolean => {
+  const arg = process.argv[1]
+  if (!arg) return false
+  try {
+    return import.meta.url === pathToFileURL(arg).href
+  } catch {
+    return false
+  }
+}
+
+if (isEntryPoint()) {
+  try {
+    await main()
+  } catch (err) {
+    logger.error('fatal', err)
+    process.exit(1)
+  }
 }
