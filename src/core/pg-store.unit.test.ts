@@ -16,7 +16,7 @@ vi.mock('../config.js', () => ({
 }))
 
 import { env } from '../config.js'
-import { buildPoolConfig, migrateSql, vectorToArray, vectorToArrayFromText } from './pgStore.js'
+import { buildPoolConfig, migrateSql, vectorToArray, vectorToArrayFromText } from './pg-store.js'
 
 afterEach(() => {
   vi.resetModules()

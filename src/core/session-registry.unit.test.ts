@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { SessionRegistry } from './sessionRegistry.js'
+import { SessionRegistry } from './session-registry.js'
 
 const makeRegistry = (overrides: { maxSessions?: number; ttlMs?: number; now?: () => number } = {}) => {
   const { maxSessions = 2, ttlMs = 30_000, now = vi.fn(() => 1_000) } = overrides
