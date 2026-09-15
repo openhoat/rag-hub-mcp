@@ -3,10 +3,10 @@ import type { Server as HttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createSqliteStore } from '../core/store.js'
-import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../testing/helpers.js'
-import { createRestApp } from '../transport/rest.js'
-import type { Store } from '../types.js'
+import { createSqliteStore } from '../../core/store'
+import { createRestApp } from '../../transport/rest'
+import type { Store } from '../../types'
+import { startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../helpers'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }
 const JSON_HEADERS = { 'Content-Type': 'application/json' }

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { makeStubStore } from '../testing/helpers.js'
+import { makeStubStore } from '../test/helpers'
 import type { Store } from '../types.js'
 import { handleToolCall } from './mcp.js'
 

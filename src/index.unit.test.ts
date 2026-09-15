@@ -5,7 +5,7 @@ import fastify from 'fastify'
 import { describe, expect, test, vi } from 'vitest'
 import { SessionRegistry } from './core/sessionRegistry.js'
 import { closeSession, handleExistingSession, handleNewSession, registerMcpEndpoints } from './index.js'
-import { makeStubStore } from './testing/helpers.js'
+import { makeStubStore } from './test/helpers'
 import type { Store } from './types.js'
 
 vi.mock('./transport/mcp.js', () => ({

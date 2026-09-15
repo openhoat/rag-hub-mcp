@@ -5,8 +5,8 @@ import type { PGliteInterface } from '@electric-sql/pglite'
 import { PGlite } from '@electric-sql/pglite'
 import { vector as pgliteVector } from '@electric-sql/pglite-pgvector'
 import type { FastifyInstance } from 'fastify'
-import { createPgStoreFromDb, type Db } from '../core/pgStore.js'
-import type { ChunkRecord, KbInfo, Store } from '../types.js'
+import { createPgStoreFromDb, type Db } from '../core/pgStore'
+import type { ChunkRecord, KbInfo, Store } from '../types'
 
 /**
  * Bridge an in-memory PGlite (real Postgres compiled to WASM + pgvector) to the

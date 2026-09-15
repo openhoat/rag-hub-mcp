@@ -186,8 +186,9 @@
     },
     "validate": {
       "dependencies": [
+        "build",
         "qa",
-        "build"
+        "test:coverage"
       ]
     }
   }

@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'node:http'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
-import { makeStubStore, startHttpServer } from '../testing/helpers.js'
+import { makeStubStore, startHttpServer } from '../test/helpers'
 import { createRestApp } from './rest.js'
 
 vi.mock('../core/ingest.js', () => ({

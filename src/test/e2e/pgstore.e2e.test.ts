@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import { createPgliteStore } from '../testing/helpers.js'
-import type { Store } from '../types.js'
+import type { Store } from '../../types'
+import { createPgliteStore } from '../helpers'
 
 /**
  * E2E for the PostgreSQL backend against a real Postgres engine compiled to

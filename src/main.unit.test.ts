@@ -45,7 +45,7 @@ vi.mock('./transport/rest.js', () => ({
 import { requireHttpApiKey } from './config.js'
 import { scanAll } from './core/ingest.js'
 import { createStore } from './core/storeFactory.js'
-import { makeStubStore } from './testing/helpers.js'
+import { makeStubStore } from './test/helpers'
 import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
 import { createRestApp } from './transport/rest.js'
 

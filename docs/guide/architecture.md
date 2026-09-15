@@ -130,7 +130,7 @@ ingest.ts / search.ts / transport/
 - The `searchFts(words: string[])` signature abstracts the full-text syntax:
   each backend builds its native query (`"w1" AND "w2"` FTS5 vs
   `to_tsquery('w1 & w2')`).
-- Tests: `src/e2e/pgstore.e2e.test.ts` against a real Postgres engine compiled
+- Tests: `src/test/e2e/pgstore.e2e.test.ts` against a real Postgres engine compiled
   in WASM (**PGlite** + pgvector extension), instantiated in memory for the duration
   of the tests — no server, no docker, separate from the production database.
 
@@ -178,5 +178,5 @@ In stdio mode, defaults are relative to the cwd (`./kbs`, `./rag.db`); in HTTP m
 ## Testing
 
 - **Unit** (`src/**/*.unit.test.ts`): pure and fast, mocked dependencies. The `/embeddings` endpoint is mocked via `stubEmbeddingsApi` (intercepts global `fetch` for this single path).
-- **E2E** (`src/e2e/**/*.e2e.test.ts`): real disk + SQLite + HTTP.
+- **E2E** (`src/test/e2e/**/*.e2e.test.ts`): real disk + SQLite + HTTP.
 - `KB_ROOT` trap: `ingest.ts` reads `KB_ROOT` on module load → `vitest.setup.ts` pins it to a shared tmpdir. Tests that drop files write into this `KB_ROOT` with unique KB names.

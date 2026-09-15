@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { makeChunk, makeStubStore, stubEmbeddingsApi, unitEmbeddings } from '../testing/helpers.js'
+import { makeChunk, makeStubStore, stubEmbeddingsApi, unitEmbeddings } from '../test/helpers'
 import type { ChunkRecord, Store } from '../types.js'
 import { search } from './search.js'
 
