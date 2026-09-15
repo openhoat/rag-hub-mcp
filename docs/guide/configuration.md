@@ -11,6 +11,7 @@ All configuration is done through environment variables. Variables are validated
 | `EMBEDDINGS_API_KEY` | _(none)_ | Bearer token for the embeddings API. |
 | `EMBEDDINGS_MODEL` | `bge-m3` | Embedding model name. |
 | `EMBEDDINGS_DIMENSION` | `1024` | Fixed vector dimension for the embedding column (bge-m3 = 1024). Used by the PostgreSQL backend to size the pgvector column. |
+| `CHUNK_MAX_CHARS` | `3200` | Maximum characters per text chunk. Lower it for small-token embedding models. See [Chunk sizing](#chunk-sizing) below. |
 | `KB_ROOT` | `./kbs` (stdio) / `/data/kbs` (http) | Root directory for knowledge base folders. |
 | `SCAN_INTERVAL` | `300` | Scan interval in seconds (0 = disabled). HTTP mode only. |
 | `PORT` | `8000` | HTTP listen port. HTTP mode only. |
@@ -36,6 +37,28 @@ All configuration is done through environment variables. Variables are validated
 | `text-embedding-3-small` | OpenAI API. |
 
 Any OpenAI-compatible `/v1/embeddings` endpoint works — Ollama, Bifrost, OpenAI, LM Studio…
+
+## Chunk sizing
+
+`CHUNK_MAX_CHARS` caps the size of each chunk fed to the embedding model. If a
+chunk exceeds the model's token limit, the embeddings call fails. Estimate a
+safe value for your model with:
+
+```
+CHUNK_MAX_CHARS ≈ chars-per-token × token limit
+```
+
+The chars-per-token ratio depends on the script. Dense scripts tokenize
+heavily, so a character budget that works in English can overflow a small-token
+model in another language.
+
+| Script | Chars/token | `CHUNK_MAX_CHARS` for a 512-token model |
+|---|---|---|
+| Latin (EN, FR…) | ~4 | ~2000 |
+| Cyrillic (RU…) | ~2.5 | ~1200 |
+
+Lower `CHUNK_MAX_CHARS` when you use a small-token model (e.g. 512) or dense
+scripts. The 400-character overlap is preserved independently of this value.
 
 ## Storage backends
 
