@@ -31,6 +31,9 @@ const EnvSchema = z.object({
   SCAN_INTERVAL: z.coerce.number().int().min(0).default(300),
   PORT: z.coerce.number().int().min(1).max(65535).default(8000),
   CORS_ORIGINS: z.string().default(''),
+  // Additional text file extensions to index, comma-separated (e.g. ".kt,.java").
+  // Merged with the built-in list at extract time, not a replacement.
+  TEXT_EXTENSIONS: z.string().default(''),
   VERSION: z.string().default('1.1.0'),
   RAG_TRANSPORT: z.enum(['stdio', 'http']).optional(),
   LOG_LEVEL: z.string().default('info'),
@@ -52,6 +55,18 @@ export const isHttpMode = isHttp
 export const corsOrigins = env.CORS_ORIGINS.split(',')
   .map(s => s.trim())
   .filter(Boolean)
+
+/** Additional text extensions as a normalized set (empty string -> empty set).
+ * Each entry is lowercased and dot-prefixed so `.kt` and `kt` both match the
+ * `extname()` format used at scan time. */
+export const extraTextExtensions: ReadonlySet<string> = new Set(
+  env.TEXT_EXTENSIONS.split(',')
+    .map(s => {
+      const ext = s.trim().toLowerCase()
+      return ext.startsWith('.') ? ext : `.${ext}`
+    })
+    .filter(ext => ext.length > 1),
+)
 
 // Transport-mode guard, kept pure so it can be unit-tested without triggering
 // the top-level server bootstrap in index.ts.

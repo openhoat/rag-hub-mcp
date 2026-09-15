@@ -56,6 +56,43 @@ describe('extractText', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  test('should extract Kotlin files as text', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'Main.kt')
+    writeFileSync(p, 'class Main {\n  fun main() = "hello"\n}', 'utf-8')
+    const { text } = await extractText(p)
+    expect(text).toContain('fun main')
+    expect(text).toContain('hello')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('should extract Java files as text', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'Main.java')
+    writeFileSync(p, 'public class Main {\n  public static void main(String[] args) {}\n}', 'utf-8')
+    const { text } = await extractText(p)
+    expect(text).toContain('public static void main')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('should extract text from an unknown extension via magic bytes', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'Main.swift')
+    writeFileSync(p, 'func greet() { print("hello") }', 'utf-8')
+    const { text } = await extractText(p)
+    expect(text).toContain('func greet')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('should reject binary content with an unknown extension', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'data.bin')
+    writeFileSync(p, Buffer.from([0x00, 0x01, 0x02, 0xff, 0x00]))
+    const { text } = await extractText(p)
+    expect(text).toBe('')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   test('should return empty string for unsupported extensions', async () => {
     const dir = makeDir()
     const p = join(dir, 'binary.bin')
@@ -160,6 +197,8 @@ describe('isTextFile', () => {
     expect(isTextFile('a.md')).toBe(true)
     expect(isTextFile('a.txt')).toBe(true)
     expect(isTextFile('a.json')).toBe(true)
+    expect(isTextFile('a.kt')).toBe(true)
+    expect(isTextFile('a.java')).toBe(true)
   })
 
   test('should reject non-text extensions', () => {
