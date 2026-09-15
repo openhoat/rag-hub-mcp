@@ -25,8 +25,9 @@ All configuration is done through environment variables. Variables are validated
 | `PG_PASSWORD` | _(none)_ | Postgres password. |
 | `PG_SSL` | `false` | Enable TLS for the Postgres connection. |
 | `CORS_ORIGINS` | _(none)_ | Allowed CORS origins (comma-separated). Empty = disables the CORS restriction. |
+| `TEXT_EXTENSIONS` | _(none)_ | Additional text extensions to index (comma-separated, e.g. `.kt,.java,.go`). Merged with the built-in list, not replacing it. Unknown extensions are also auto-detected as text via magic bytes. |
 | `RAG_TRANSPORT` | `stdio` | `stdio` or `http`. The `--http` flag wins. |
-| `VERSION` | `1.1.0` | Reported version. |
+| `VERSION` | `1.2.0` | Reported version. |
 
 ## Recommended embedding models
 
