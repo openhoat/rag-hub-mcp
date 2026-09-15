@@ -28,6 +28,26 @@ describe('extractText', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  test('should normalize CRLF line endings to LF', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'crlf.md')
+    writeFileSync(p, '# Title\r\n\r\nFirst paragraph\r\n\r\nSecond paragraph\r\n', 'utf-8')
+    const { text } = await extractText(p)
+    expect(text).not.toContain('\r')
+    expect(text).toBe('# Title\n\nFirst paragraph\n\nSecond paragraph\n')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('should normalize bare CR line endings to LF', async () => {
+    const dir = makeDir()
+    const p = join(dir, 'cr-only.txt')
+    writeFileSync(p, 'line one\rline two\r', 'utf-8')
+    const { text } = await extractText(p)
+    expect(text).not.toContain('\r')
+    expect(text).toBe('line one\nline two\n')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   test('should read markdown and code files', async () => {
     const dir = makeDir()
     const p = join(dir, 'doc.md')

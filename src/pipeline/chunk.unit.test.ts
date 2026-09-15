@@ -25,6 +25,20 @@ describe('chunkText', () => {
     }
   })
 
+  test('should chunk CRLF text into multiple paragraphs', () => {
+    const paragraph = 'word '.repeat(400) // ~2000 chars
+    const text = Array.from({ length: 4 }, () => paragraph).join('\r\n\r\n') // CRLF separators
+    const chunks = chunkText(text, 'docs/crlf.md', 'dev')
+    expect(chunks.length).toBeGreaterThan(1)
+  })
+
+  test('should honor a custom maxChars limit', () => {
+    const paragraph = 'word '.repeat(200) // ~1000 chars
+    const text = Array.from({ length: 6 }, () => paragraph).join('\n\n')
+    const chunks = chunkText(text, 'docs/custom.md', 'dev', null, 1500)
+    expect(chunks.length).toBeGreaterThan(2)
+  })
+
   test('should carry heading path from the document', () => {
     const text = '# Title\n\n## Section\n\nSome content here.'
     const chunks = chunkText(text, 'h.md', 'kb')
