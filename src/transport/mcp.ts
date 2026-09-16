@@ -190,7 +190,12 @@ ${r.content}`,
     case 'rag_reindex': {
       const result = await scanAll(store)
       return {
-        content: [{ type: 'text', text: `Reindex complete: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped}` }],
+        content: [
+          {
+            type: 'text',
+            text: `Reindex complete: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped} x${result.excluded}`,
+          },
+        ],
       }
     }
 

@@ -109,6 +109,41 @@ describe('scanAll', () => {
     expect(result.modified).toBe(1)
   })
 
+  test('should count files with no extractable text as excluded, not added', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.bin'), '\u0000\u0001\u0002', 'utf-8')
+    vi.mocked(extractText).mockImplementationOnce(async () => ({ text: '', frontmatter: null }))
+    const result = await scanAll(store, root)
+    expect(result.excluded).toBe(1)
+    expect(result.added).toBe(0)
+  })
+
+  test('should re-index a file whose chunks have null embeddings', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    await scanAll(store, root)
+
+    // Simulate an embeddings outage: store a chunk without a vector.
+    const kbId = (await store.getKbId('docs')) as number
+    const file = await store.getFile(kbId, 'a.md')
+    await store.deleteChunks(file?.id as number)
+    await store.insertChunk({
+      fileId: file?.id as number,
+      chunkIndex: 0,
+      content: 'chunk without vector',
+      metadata: '{}',
+      embedding: null,
+    })
+
+    const second = await scanAll(store, root)
+    expect(second.modified).toBe(1)
+    expect(second.skipped).toBe(0)
+  })
+
   test('should handle a missing root gracefully', async () => {
     const setup = setupKb()
     root = setup.root

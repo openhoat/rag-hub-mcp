@@ -10,7 +10,7 @@ vi.mock('../core/ingest.js', () => ({
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
   readDocument: vi.fn(async () => ({ content: 'extracted text', frontmatter: null })),
-  scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
+  scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0, excluded: 0 })),
 }))
 vi.mock('../core/search.js', () => ({
   search: vi.fn(async () => [{ kb: 'kb', relPath: 'f.md', chunkIndex: 0, content: 'hit', score: 0.5 }]),
@@ -70,7 +70,7 @@ describe('rest', () => {
   })
 
   test('POST /admin/reindex should force a scan', async () => {
-    mockedScan.mockResolvedValueOnce({ added: 1, modified: 0, deleted: 0, skipped: 0 })
+    mockedScan.mockResolvedValueOnce({ added: 1, modified: 0, deleted: 0, skipped: 0, excluded: 0 })
     const res = await fetch(`${base}/admin/reindex`, { method: 'POST', headers: AUTH })
     expect(res.status).toBe(200)
     expect(mockedScan).toHaveBeenCalledTimes(1)

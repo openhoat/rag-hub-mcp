@@ -97,3 +97,15 @@ the column is sized once at migration time.
 - **http** (`--http` / `RAG_TRANSPORT=http`): REST API + streamable-http MCP on `PORT`.
 
 In stdio mode, logs go to stderr (stdout is reserved for JSON-RPC); there is no periodic scan.
+
+## Scan behavior
+
+- **Skipped vs excluded** — the scan tally (`+added ~modified -deleted =skipped xexcluded`)
+  distinguishes files that are unchanged (`skipped`) from files that were scanned but
+  not indexed because they have no extractable text (`excluded`, i.e. binary or empty).
+  Run with `LOG_LEVEL=debug` to see the per-file reason.
+- **Self-healing vectors** — if the embeddings endpoint is down during a scan, chunks
+  are stored without a vector. On the next scan any file with null-vector chunks is
+  automatically re-indexed (content unchanged is not enough to skip it), so no manual
+  table wipe is needed to recover. The scan log reports these as
+  `re-indexing (null embeddings)`.

@@ -241,8 +241,12 @@ class StoreImpl implements Store {
       return null
     }
   }
-}
 
+  hasNullEmbeddings = async (fileId: number): Promise<boolean> => {
+    const row = this.db.prepare('SELECT 1 FROM chunks WHERE file_id = ? AND embedding IS NULL LIMIT 1').get(fileId)
+    return Boolean(row)
+  }
+}
 export const createSqliteStore = (dbPath: string): Store => {
   const db = new Database(dbPath)
   db.pragma('journal_mode = WAL')

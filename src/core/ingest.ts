@@ -24,7 +24,7 @@ interface KnownFile {
 const SCAN_IGNORE = ['.git/**', 'node_modules/**', '__pycache__/**', '.DS_Store', 'Thumbs.db', '.env', '.secrets']
 
 export const scanAll = async (store: Store, root: string = KB_ROOT): Promise<IngestResult> => {
-  const result: IngestResult = { added: 0, modified: 0, deleted: 0, skipped: 0 }
+  const result: IngestResult = { added: 0, modified: 0, deleted: 0, skipped: 0, excluded: 0 }
 
   if (!existsSync(root)) {
     logger.warn('KB_ROOT does not exist', root)
@@ -45,7 +45,7 @@ export const scanAll = async (store: Store, root: string = KB_ROOT): Promise<Ing
 
   await cleanupStale(store, kbDirs, knownFiles, result)
 
-  logger.info(`scan: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped}`)
+  logger.info(`scan: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped} x${result.excluded}`)
   return result
 }
 
@@ -75,21 +75,31 @@ const scanKb = async (
     const known = knownFiles.get(knownKey)
     const knownId = known?.id
 
-    if (isUnchanged(known, st)) {
+    // Self-heal: a file whose chunks were stored without vectors (e.g. the
+    // embeddings endpoint was down during a prior scan) is re-indexed even
+    // though its content is unchanged.
+    const needsReembed = knownId ? await store.hasNullEmbeddings(knownId) : false
+
+    if (isUnchanged(known, st) && !needsReembed) {
       result.skipped++
       knownFiles.delete(knownKey)
       continue
     }
 
     const sha256 = hashFile(fullPath)
-    if (isSameHash(known, sha256)) {
+
+    if (isSameHash(known, sha256) && !needsReembed) {
       await store.updateFileMtime(knownId as number, Math.floor(st.mtimeMs))
       knownFiles.delete(knownKey)
       result.skipped++
       continue
     }
 
-    if (knownId) {
+    if (needsReembed) {
+      logger.info('re-indexing (null embeddings): %s', entry)
+      await store.deleteChunks(knownId as number)
+      result.modified++
+    } else if (knownId) {
       await store.deleteChunks(knownId)
       await store.deleteFile(knownId)
       result.modified++
@@ -98,7 +108,14 @@ const scanKb = async (
       result.added++
     }
 
-    await indexFile(store, kbId, entry, fullPath, sha256, st)
+    const indexed = await indexFile(store, kbId, entry, fullPath, sha256, st)
+    if (!indexed) {
+      // Not indexable (binary or empty). Reclass the counter so the tally stays
+      // truthful — the file was scanned but not indexed.
+      result[knownId || needsReembed ? 'modified' : 'added']--
+      result.excluded++
+      logger.warn('skipped (no extractable text): %s', entry)
+    }
     knownFiles.delete(knownKey)
   }
 }
@@ -152,9 +169,9 @@ export const indexFile = async (
   fullPath: string,
   sha256: string,
   st: { mtimeMs: number; size: number },
-) => {
+): Promise<boolean> => {
   const { text, frontmatter } = await extractText(fullPath)
-  if (!text) return
+  if (!text) return false
 
   const fileId = await store.upsertFile({
     kbId,
@@ -166,7 +183,7 @@ export const indexFile = async (
 
   const kbName = await store.getKbName(kbId)
   const chunks = chunkText(text, relPath, kbName, frontmatter)
-  if (chunks.length === 0) return
+  if (chunks.length === 0) return false
 
   const texts = chunks.map(c => c.content)
   let embeddings: Float32Array[] = []
@@ -189,6 +206,7 @@ export const indexFile = async (
     const emb = embeddings[i]
     await store.insertChunk({ fileId, chunkIndex: i, content: c.content, metadata: c.metadata, embedding: emb })
   }
+  return true
 }
 
 export const addDocument = async (store: Store, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {

@@ -61,7 +61,7 @@ describe('main bootstrap', () => {
     state.httpEnabled = false
     state.apiKey = 'key'
     vi.mocked(createStore).mockResolvedValue(store)
-    vi.mocked(scanAll).mockResolvedValue({ added: 1, modified: 0, deleted: 0, skipped: 0 })
+    vi.mocked(scanAll).mockResolvedValue({ added: 1, modified: 0, deleted: 0, skipped: 0, excluded: 0 })
     vi.mocked(createMcpServer).mockReturnValue(stubServer() as never)
     vi.mocked(createStreamableHttpTransport).mockReturnValue(stubTransport() as never)
     vi.mocked(createRestApp).mockReset()

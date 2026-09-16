@@ -389,6 +389,11 @@ export class PgStore implements Store {
     }
   }
 
+  hasNullEmbeddings = async (fileId: number): Promise<boolean> => {
+    const { rows } = await this.query('SELECT 1 FROM chunks WHERE file_id = $1 AND embedding IS NULL LIMIT 1', [fileId])
+    return rows.length > 0
+  }
+
   private readonly toChunk = (r: PgRow): ChunkRecord => {
     return {
       id: toNum(r.id),
