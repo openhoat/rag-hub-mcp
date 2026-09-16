@@ -6,7 +6,7 @@ Closes #N
 
 ## Changes
 
-- 
+-
 
 ## Testing
 

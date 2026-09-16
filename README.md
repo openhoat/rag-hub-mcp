@@ -24,13 +24,26 @@ Most RAG setups need a vector database, a chunking pipeline, an embeddings servi
 
 ## How it works
 
-```mermaid
-graph TD
-    KBS["./kbs/ — folders = knowledge bases"] -->|scan SHA-256 diff| PROC["extract → chunk → embed<br/>bge-m3 / any OpenAI-compatible API"]
-    PROC --> DB[("SQLite + FTS5<br/>or PostgreSQL + pgvector")]
-    DB --> SRCH["hybrid score<br/>cosine 0.65 + FTS 0.35"]
-    SRCH --> MCP["MCP tools<br/>stdio / http"]
-    SRCH --> REST["REST API<br/>/search"]
+```text
+./kbs/ — folders = knowledge bases
+  │
+  │  scan (SHA-256 diff)
+  ▼
+extract → chunk → embed
+  │  bge-m3 / any OpenAI-compatible API
+  ▼
+┌─────────────────────────────┐
+│  SQLite + FTS5              │
+│  or PostgreSQL + pgvector   │
+└─────────────────────────────┘
+  │
+  │  hybrid score
+  │  cosine 0.65 + FTS 0.35
+  ▼
+┌──────────────┐  ┌──────────────┐
+│  MCP tools   │  │  REST API    │
+│  stdio/http  │  │  /search     │
+└──────────────┘  └──────────────┘
 ```
 
 ## Install
@@ -93,7 +106,7 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 **9 tools over MCP**, callable from any MCP-compatible agent:
 
 | Tool | Description |
-|---|---|
+| --- | --- |
 | `rag_list_kbs` | List KBs with stats |
 | `rag_list_documents` | List documents in a KB |
 | `rag_search` | Hybrid search (`kb` optional) |
@@ -107,7 +120,7 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 **Small REST API** (`--http` mode), all endpoints except `/health` require `MCP_API_KEY`:
 
 | Endpoint | Method | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `/health` | GET | Health check |
 | `/admin/kbs` | GET | List KBs |
 | `/admin/kbs/:kb/documents` | GET / POST / DELETE | List / add / delete documents |
@@ -124,11 +137,12 @@ Set via environment variables (`MCP_API_KEY`, `EMBEDDINGS_BASE_URL`, `EMBEDDINGS
 
 ## Roadmap
 
+- **Async indexing** — job queue + worker (store-backed, Redis-pluggable) for non-blocking, crash-safe scans
+- Native pgvector similarity search in the PostgreSQL backend (`<=>` / `LIMIT k`)
 - Streaming search results over MCP
 - Web UI dashboard (stats, documents, live search)
-- Native pgvector similarity search in the PostgreSQL backend (`<=>` / `LIMIT k`)
-- Multi-tenant / shared deployments
 - Reranking of hybrid results
+- Multi-tenant / shared deployments
 
 ## Documentation
 
