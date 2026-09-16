@@ -4,7 +4,8 @@
     "MD013": false,
     "MD024": false,
     "MD033": false,
-    "MD041": false
+    "MD041": false,
+    "MD060": { "style": "aligned" }
   },
   "globs": [
     "**/*.md",
@@ -13,6 +14,7 @@
     "!CHANGELOG.md",
     "!coverage/**",
     "!dist/**",
-    "!.wireit/**"
+    "!.wireit/**",
+    "!.opencode/rules/**"
   ]
 }

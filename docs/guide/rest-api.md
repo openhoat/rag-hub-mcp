@@ -4,17 +4,17 @@ All endpoints except `/health` require a Bearer token (`MCP_API_KEY`). `rag-hub-
 
 ## Endpoints
 
-| Endpoint | Method | Auth | Description |
-| --- | --- | --- | --- |
-| `/health` | GET | — | Health check |
-| `/admin/kbs` | GET | Bearer | List KBs |
-| `/admin/kbs/:kb/documents` | GET | Bearer | List documents |
-| `/admin/kbs/:kb/documents` | POST | Bearer | Add document (`json: {path, content}`) |
-| `/admin/kbs/:kb/documents/*` | DELETE | Bearer | Delete document |
-| `/admin/kbs/:kb` | DELETE | Bearer | Delete KB |
-| `/admin/reindex` | POST | Bearer | Force reindex |
-| `/admin/status` | GET | Bearer | Index status |
-| `/search?query=...&kb=...&top_k=10` | GET | Bearer | Search |
+| Endpoint                            | Method | Auth   | Description                            |
+| ----------------------------------- | ------ | ------ | -------------------------------------- |
+| `/health`                           | GET    | —      | Health check                           |
+| `/admin/kbs`                        | GET    | Bearer | List KBs                               |
+| `/admin/kbs/:kb/documents`          | GET    | Bearer | List documents                         |
+| `/admin/kbs/:kb/documents`          | POST   | Bearer | Add document (`json: {path, content}`) |
+| `/admin/kbs/:kb/documents/*`        | DELETE | Bearer | Delete document                        |
+| `/admin/kbs/:kb`                    | DELETE | Bearer | Delete KB                              |
+| `/admin/reindex`                    | POST   | Bearer | Force reindex                          |
+| `/admin/status`                     | GET    | Bearer | Index status                           |
+| `/search?query=...&kb=...&top_k=10` | GET    | Bearer | Search                                 |
 
 ## Examples
 
