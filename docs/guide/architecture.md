@@ -62,8 +62,12 @@ graph LR
     F["/kbs — 1 folder = 1 KB<br/>KB_ROOT"] -->|periodic scan| GLOB["fast-glob **/*<br/>ignores .git, node_modules…"]
     GLOB --> STAT["stat + SHA-256 diff"]
     STAT -->|unchanged| SKIP["skip"]
-    STAT -->|modified| RE["delete chunks<br/>-> re-index"]
+    STAT -->|null embeddings| RE["re-index<br/>self-heal"]
+    STAT -->|binary/empty| EXCL["excluded++<br/>logged"]
+    STAT -->|modified| REMOD["delete chunks<br/>-> re-index"]
     STAT -->|new| EXTR["extract.ts"]
+    RE --> EXTR
+    REMOD --> EXTR
     EXTR --> CH["chunk.ts<br/>max 3200, overlap 400, headings"]
     CH --> EMB["embed.ts<br/>batch 16 / OpenAI-compatible"]
     EMB --> DB[("SQLite<br/>kbs · files · chunks · fts_chunks")]
@@ -79,11 +83,13 @@ graph LR
 `scanKb` compares each file against what is stored in the database:
 
 | Case | Condition | Action |
-|---|---|---|
+| --- | --- | --- |
 | unchanged | same `mtime` + same size | `skipped++` |
 | same content | same SHA-256 (mtime changed) | update `mtime` only, `skipped++` |
 | modified | different SHA-256 | purge chunks, re-index, `modified++` |
 | new | absent from database | purge any stale file, index, `added++` |
+| binary/empty | no extractable text | `excluded++`, logged (`warn`) |
+| null embeddings | chunks with `embedding IS NULL` | re-index even if unchanged, `modified++` |
 
 ## SQLite schema
 
@@ -105,9 +111,8 @@ fts_chunks (VIRTUAL fts5: content, metadata UNINDEXED, tokenize='porter unicode6
 `storeFactory.ts` selects the backend according to `STORE_BACKEND`. The rest of the
 code only sees the `Store` interface:
 
-```
-ingest.ts / search.ts / transport/
-        ↓
+```text
+ingest.ts / search.ts / transport/        ↓
     Store interface (18 async methods)
         ↓
     storeFactory.ts → STORE_BACKEND=sqlite   → store.ts    (better-sqlite3 + FTS5)
@@ -155,7 +160,7 @@ graph LR
 ## Transport models
 
 | | stdio (default) | HTTP (`--http`) |
-|---|---|---|
+| --- | --- | --- |
 | Connection | `StdioServerTransport` over stdin/stdout | `StreamableHTTPServerTransport` (streamable-http) |
 | Scan | initial one-shot | initial + periodic (`SCAN_INTERVAL`) |
 | MCP sessions | one, unique | one per client: `Map<sessionId, {server, transport}>` |

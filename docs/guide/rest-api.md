@@ -5,7 +5,7 @@ All endpoints except `/health` require a Bearer token (`MCP_API_KEY`). `rag-hub-
 ## Endpoints
 
 | Endpoint | Method | Auth | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `/health` | GET | — | Health check |
 | `/admin/kbs` | GET | Bearer | List KBs |
 | `/admin/kbs/:kb/documents` | GET | Bearer | List documents |

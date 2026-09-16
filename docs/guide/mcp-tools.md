@@ -3,7 +3,7 @@
 `rag-hub-mcp` exposes 9 tools over the Model Context Protocol. Any MCP-compatible agent (opencode, Claude Code, Cline…) can call them.
 
 | Tool | Description |
-|---|---|
+| --- | --- |
 | `rag_list_kbs` | List knowledge bases with stats |
 | `rag_list_documents` | List documents in a KB |
 | `rag_search` | Search KBs (`kb` optional — omitting searches all) |

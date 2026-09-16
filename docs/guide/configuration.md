@@ -5,7 +5,7 @@ All configuration is done through environment variables. Variables are validated
 ## Environment variables
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `MCP_API_KEY` | _(required in HTTP)_ | Bearer token for REST + MCP over HTTP. Ignored in stdio mode. |
 | `EMBEDDINGS_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible `/v1/embeddings` endpoint. |
 | `EMBEDDINGS_API_KEY` | _(none)_ | Bearer token for the embeddings API. |
@@ -32,7 +32,7 @@ All configuration is done through environment variables. Variables are validated
 ## Recommended embedding models
 
 | Model | Notes |
-|---|---|
+| --- | --- |
 | **bge-m3** | Multilingual (FR/EN), 1024d, best open-source retrieval, CPU-friendly. **Recommended.** |
 | `nomic-embed-text` | Lighter, English-focused. |
 | `text-embedding-3-small` | OpenAI API. |
@@ -45,7 +45,7 @@ Any OpenAI-compatible `/v1/embeddings` endpoint works — Ollama, Bifrost, OpenA
 chunk exceeds the model's token limit, the embeddings call fails. Estimate a
 safe value for your model with:
 
-```
+```text
 CHUNK_MAX_CHARS ≈ chars-per-token × token limit
 ```
 
@@ -54,7 +54,7 @@ heavily, so a character budget that works in English can overflow a small-token
 model in another language.
 
 | Script | Chars/token | `CHUNK_MAX_CHARS` for a 512-token model |
-|---|---|---|
+| --- | --- | --- |
 | Latin (EN, FR…) | ~4 | ~2000 |
 | Cyrillic (RU…) | ~2.5 | ~1200 |
 

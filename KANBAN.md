@@ -19,19 +19,20 @@
 - [x] Phase 1: make Store async, encapsulate store.db, fix SIGABRT
 - [x] Audit impact & choose direction (PostgreSQL + pgvector pluggable)
 - [x] Phase 2: pluggable PostgreSQL backend
-    - [x] Abstract FTS signature (`searchFts(words[])`) in types.ts / store.ts / search.ts
-    - [x] Add PostgreSQL config (STORE_BACKEND, DATABASE_URL/PG_*, EMBEDDINGS_DIMENSION) to config.ts + .env.example
-    - [x] Implement PgStore (src/core/pgStore.ts): pg + pgvector + generated tsv/ts_rank FTS
-    - [x] storeFactory.ts pluggable selection (sqlite default / postgres opt-in), index.ts
-    - [x] pg dependency + e2e pgstore.e2e.test.ts via PGlite in-memory (Postgres WASM + pgvector, no docker/server)
-    - [x] Update docs (architecture, configuration, README)
+  - [x] Abstract FTS signature (`searchFts(words[])`) in types.ts / store.ts / search.ts
+  - [x] Add PostgreSQL config (STORE_BACKEND, DATABASE_URL/PG_*, EMBEDDINGS_DIMENSION) to config.ts + .env.example
+  - [x] Implement PgStore (src/core/pgStore.ts): pg + pgvector + generated tsv/ts_rank FTS
+  - [x] storeFactory.ts pluggable selection (sqlite default / postgres opt-in), index.ts
+  - [x] pg dependency + e2e pgstore.e2e.test.ts via PGlite in-memory (Postgres WASM + pgvector, no docker/server)
+  - [x] Update docs (architecture, configuration, README)
 
 ## In Progress
 
-### #11 [FEAT] Scan visibility (excluded counter) + self-healing null embeddings (GH #5 feedback)
+### #12 [ARCHITECTURE] Async indexing via job queue + worker (P2)
 
-- [x] Add `excluded` to `IngestResult` + `hasNullEmbeddings` to `Store`
-- [x] Surface `excluded` in scan log, `rag_reindex`, `/admin/reindex`
-- [x] Re-index files with null-vector chunks on next scan
-- [x] Doc note (scan behavior) in configuration.md
-- [x] Tests + validation (187)
+- [ ] JobQueue interface + SqliteJobQueue + PgJobQueue (store table, future Redis pluggable)
+- [ ] scanAll → producer (enqueue jobs, return ScanResult)
+- [ ] Worker consumer loop (concurrency, retry, stale reclaim) — runs in stdio + HTTP
+- [ ] Config: INDEXER_CONCURRENCY=4, INDEXER_RETRY_MAX=3, INDEXER_STALE_TIMEOUT=300
+- [ ] Observabilité: rag_status + /admin/status + /admin/jobs (pending/processing/failed)
+- [ ] Tests + validation
