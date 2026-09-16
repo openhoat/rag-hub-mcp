@@ -1,0 +1,7 @@
+CHANGELOG.md
+.opencode/rules/
+node_modules/
+.npm/
+coverage/
+dist/
+.wireit/

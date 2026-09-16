@@ -82,13 +82,13 @@ graph LR
 
 `scanKb` compares each file against what is stored in the database:
 
-| Case | Condition | Action |
-| --- | --- | --- |
-| unchanged | same `mtime` + same size | `skipped++` |
-| same content | same SHA-256 (mtime changed) | update `mtime` only, `skipped++` |
-| modified | different SHA-256 | purge chunks, re-index, `modified++` |
-| new | absent from database | purge any stale file, index, `added++` |
-| binary/empty | no extractable text | `excluded++`, logged (`warn`) |
+| Case            | Condition                       | Action                                   |
+| --------------- | ------------------------------- | ---------------------------------------- |
+| unchanged       | same `mtime` + same size        | `skipped++`                              |
+| same content    | same SHA-256 (mtime changed)    | update `mtime` only, `skipped++`         |
+| modified        | different SHA-256               | purge chunks, re-index, `modified++`     |
+| new             | absent from database            | purge any stale file, index, `added++`   |
+| binary/empty    | no extractable text             | `excluded++`, logged (`warn`)            |
 | null embeddings | chunks with `embedding IS NULL` | re-index even if unchanged, `modified++` |
 
 ## SQLite schema
@@ -159,15 +159,15 @@ graph LR
 
 ## Transport models
 
-| | stdio (default) | HTTP (`--http`) |
-| --- | --- | --- |
-| Connection | `StdioServerTransport` over stdin/stdout | `StreamableHTTPServerTransport` (streamable-http) |
-| Scan | initial one-shot | initial + periodic (`SCAN_INTERVAL`) |
-| MCP sessions | one, unique | one per client: `Map<sessionId, {server, transport}>` |
-| REST | no | yes (`/health`, `/admin/*`, `/search`) |
-| Logs | → stderr (stdout = JSON-RPC) | → stdout |
+|              | stdio (default)                          | HTTP (`--http`)                                       |
+| ------------ | ---------------------------------------- | ----------------------------------------------------- |
+| Connection   | `StdioServerTransport` over stdin/stdout | `StreamableHTTPServerTransport` (streamable-http)     |
+| Scan         | initial one-shot                         | initial + periodic (`SCAN_INTERVAL`)                  |
+| MCP sessions | one, unique                              | one per client: `Map<sessionId, {server, transport}>` |
+| REST         | no                                       | yes (`/health`, `/admin/*`, `/search`)                |
+| Logs         | → stderr (stdout = JSON-RPC)             | → stdout                                              |
 
-In HTTP, each MCP client gets **its own** `McpServer` + `StreamableHTTPServerTransport` pair, identified by a `Mcp-Session-Id` (UUID). A POST `/mcp` without a session creates a dedicated transport; subsequent calls reuse this transport via the session header. This avoids the *"Server already initialized"* error on concurrent clients. `GET /mcp` exposes the list of the 9 tools (useful for the MCP inspector).
+In HTTP, each MCP client gets **its own** `McpServer` + `StreamableHTTPServerTransport` pair, identified by a `Mcp-Session-Id` (UUID). A POST `/mcp` without a session creates a dedicated transport; subsequent calls reuse this transport via the session header. This avoids the _"Server already initialized"_ error on concurrent clients. `GET /mcp` exposes the list of the 9 tools (useful for the MCP inspector).
 
 The MCP SDK receives Fastify's native Node objects `IncomingMessage`/`ServerResponse`: `transport.handleRequest(request.raw, reply.raw, request.body)`. In Fastify, `reply.hijack()` is used to take back control of the raw response before passing `reply.raw` to the SDK: `reply.hijack()` transfers the response lifecycle to the caller, and the SDK writes directly (SSE + JSON-RPC) on the raw Node response.
 
