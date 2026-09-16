@@ -79,6 +79,7 @@ export const makeStubStore = (overrides: Partial<Store> = {}): Store => {
     getKbName: async () => '?',
     listKnownFiles: async () => [],
     searchFts: async () => null,
+    hasNullEmbeddings: async () => false,
     ...overrides,
   }
 }

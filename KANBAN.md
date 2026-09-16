@@ -28,3 +28,10 @@
 
 ## In Progress
 
+### #11 [FEAT] Scan visibility (excluded counter) + self-healing null embeddings (GH #5 feedback)
+
+- [x] Add `excluded` to `IngestResult` + `hasNullEmbeddings` to `Store`
+- [x] Surface `excluded` in scan log, `rag_reindex`, `/admin/reindex`
+- [x] Re-index files with null-vector chunks on next scan
+- [x] Doc note (scan behavior) in configuration.md
+- [x] Tests + validation (187)

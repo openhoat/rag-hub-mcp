@@ -74,6 +74,8 @@ export interface Store {
   getKbName(kbId: number): Promise<string>
   listKnownFiles(): Promise<KnownFileRow[]>
   searchFts(words: string[]): Promise<FtsRow[] | null>
+  /** True when the file has at least one chunk stored without an embedding. */
+  hasNullEmbeddings(fileId: number): Promise<boolean>
 }
 
 export interface IngestResult {
@@ -81,6 +83,8 @@ export interface IngestResult {
   modified: number
   deleted: number
   skipped: number
+  /** Files scanned but not indexed (no extractable text — binary/empty). */
+  excluded: number
 }
 
 export interface ExtractResult {

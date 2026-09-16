@@ -14,7 +14,7 @@ vi.mock('../core/ingest.js', () => ({
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
   readDocument: vi.fn(async () => ({ content: 'full document content', frontmatter: null })),
-  scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0 })),
+  scanAll: vi.fn(async () => ({ added: 1, modified: 0, deleted: 0, skipped: 0, excluded: 0 })),
 }))
 
 const mockedAdd = vi.mocked(addDocument)
