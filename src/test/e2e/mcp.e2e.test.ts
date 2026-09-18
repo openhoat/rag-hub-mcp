@@ -168,6 +168,14 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     expect(call.messages.find(m => m.id === 3)?.result).toBeTruthy()
   })
 
+  test('should expose a self-contained-query hint in the rag_search description', async () => {
+    const sessionId = await initialize(base)
+    const list = await postSse(base, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }, sessionId)
+    const tools = (list.messages.find(m => m.id === 2)?.result as { tools: Array<{ name: string; description?: string }> })?.tools ?? []
+    const searchTool = tools.find(t => t.name === 'rag_search')
+    expect(searchTool?.description ?? '').toContain('self-contained query')
+  })
+
   test('should support multiple concurrent sessions without re-initialization errors', async () => {
     const sessionA = await initialize(base)
     const sessionB = await initialize(base)
