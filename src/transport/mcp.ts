@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
 import { env } from '../config.js'
-import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
+import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import type { Store } from '../types.js'
 
@@ -43,6 +43,9 @@ const deleteDocArgs = {
 const readArgs = {
   kb: z.string().describe('Knowledge base name'),
   path: z.string().describe('Document relative path'),
+}
+const reindexArgs = {
+  force: z.boolean().optional().describe('If true, purge all chunks and files before scanning (full rebuild). Default: false.'),
 }
 
 export const createMcpServer = (store: Store): McpServer => {
@@ -98,8 +101,12 @@ export const createMcpServer = (store: Store): McpServer => {
 
   server.registerTool(
     'rag_reindex',
-    { description: 'Trigger immediate reindex of all KBs (scan for new/changed/deleted files)' },
-    async () => handleToolCall(store, 'rag_reindex', {}),
+    {
+      description:
+        'Trigger a scan of all KBs for new/changed/deleted files. Set force=true to rebuild the entire index from scratch (purges and re-embeds every document).',
+      inputSchema: reindexArgs,
+    },
+    async args => handleToolCall(store, 'rag_reindex', args),
   )
 
   server.registerTool(
@@ -189,7 +196,8 @@ ${r.content}`,
     }
 
     case 'rag_reindex': {
-      const result = await scanAll(store)
+      const { force } = z.object(reindexArgs).parse(args)
+      const result = force ? await forceReindex(store) : await scanAll(store)
       return {
         content: [
           {

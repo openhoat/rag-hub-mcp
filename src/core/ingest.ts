@@ -24,6 +24,19 @@ interface KnownFile {
 
 const SCAN_IGNORE = ['.git/**', 'node_modules/**', '__pycache__/**', '.DS_Store', 'Thumbs.db', '.env', '.secrets']
 
+/**
+ * Rebuild the entire index from scratch. Purges all chunks and files (and their
+ * FTS rows) for every known KB, then runs a full scan so every document is
+ * re-extracted, re-chunked and re-embedded. KB folders themselves are kept.
+ */
+export const forceReindex = async (store: Store, root: string = KB_ROOT): Promise<IngestResult> => {
+  const kbs = await store.listAllKbs()
+  for (const kb of kbs) {
+    await store.purgeKb(kb.id)
+  }
+  return scanAll(store, root)
+}
+
 export const scanAll = async (store: Store, root: string = KB_ROOT): Promise<IngestResult> => {
   const result: IngestResult = { added: 0, modified: 0, deleted: 0, skipped: 0, excluded: 0 }
 

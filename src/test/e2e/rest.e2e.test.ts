@@ -84,6 +84,25 @@ describe('REST API (real store + ingest + search)', () => {
     expect(searchBody.results[0].relPath).toBe('ref/api.md')
   })
 
+  test('should rebuild the index when POST /admin/reindex?force=true is used', async () => {
+    writeKbDocument(process.env.KB_ROOT as string, 'forcerest', 'a.md', 'force reindex content marker')
+    // Index once (no force -> incremental).
+    await fetch(`${base}/admin/reindex`, { method: 'POST', headers: AUTH })
+
+    // Plain reindex would skip unchanged files; ?force=true must purge & rebuild.
+    const forceRes = await fetch(`${base}/admin/reindex?force=true`, { method: 'POST', headers: AUTH })
+    expect(forceRes.status).toBe(200)
+    const body = (await forceRes.json()) as { added: number; skipped: number }
+    // force=true rebuilds every KB in the shared KB_ROOT; the key assertion is
+    // that unchanged files are NOT skipped, proving a full purge + re-embed.
+    expect(body.added).toBeGreaterThanOrEqual(1)
+    expect(body.skipped).toBe(0)
+
+    const searchRes = await fetch(`${base}/search?query=marker`, { headers: AUTH })
+    const searchBody = (await searchRes.json()) as { results: Array<{ relPath: string }> }
+    expect(searchBody.results.length).toBeGreaterThan(0)
+  })
+
   test('should delete an entire knowledge base', async () => {
     const addRes = await fetch(`${base}/admin/kbs/tmp/documents`, {
       method: 'POST',

@@ -21,7 +21,7 @@ vi.mock('../pipeline/extract.js', () => ({
 import { enrichChunkContent } from '../pipeline/contextualChunking.js'
 import { embedTexts } from '../pipeline/embed.js'
 import { extractText } from '../pipeline/extract.js'
-import { addDocument, deleteDocument, deleteKb, indexFile, readDocument, scanAll } from './ingest.js'
+import { addDocument, deleteDocument, deleteKb, forceReindex, indexFile, readDocument, scanAll } from './ingest.js'
 
 let root: string
 let store: Store
@@ -121,6 +121,18 @@ describe('scanAll', () => {
     const second = await scanAll(store, root)
     expect(second.skipped).toBe(1)
     expect(second.added).toBe(0)
+  })
+
+  test('should re-index unchanged files with forceReindex', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    await scanAll(store, root)
+    // Content unchanged -> a plain scan would skip; force purges and rebuilds.
+    const forced = await forceReindex(store, root)
+    expect(forced.added).toBe(1)
+    expect(forced.skipped).toBe(0)
   })
 
   test('should detect modified files', async () => {
