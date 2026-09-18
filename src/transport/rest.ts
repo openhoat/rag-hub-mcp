@@ -3,7 +3,7 @@ import rateLimit from '@fastify/rate-limit'
 import fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { corsOrigins, env } from '../config.js'
-import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
+import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../core/ingest.js'
 import { search } from '../core/search.js'
 import { getLogger } from '../log.js'
 import type { Store } from '../types.js'
@@ -158,9 +158,10 @@ export const createRestApp = async (store: Store) => {
     await handleGetDocument(req, reply)
   })
 
-  app.post('/admin/reindex', reindexLimiter, async (_req, reply) => {
-    if (!auth(_req, reply)) return
-    const result = await scanAll(store)
+  app.post<{ Querystring: { force?: string } }>('/admin/reindex', reindexLimiter, async (req, reply) => {
+    if (!auth(req, reply)) return
+    const force = req.query.force === 'true'
+    const result = force ? await forceReindex(store) : await scanAll(store)
     void reply.send(result)
   })
 

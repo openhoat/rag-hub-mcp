@@ -11,7 +11,7 @@
 | `rag_read`            | Retrieve the full extracted content of a document (KB + path)                                      |
 | `rag_delete_document` | Delete a document                                                                                  |
 | `rag_delete_kb`       | Delete an entire KB                                                                                |
-| `rag_reindex`         | Trigger an immediate scan                                                                          |
+| `rag_reindex`         | Scan for changes (`force: true` rebuilds from scratch)                                             |
 | `rag_status`          | Index overview (KBs, documents, chunks)                                                            |
 
 ## Example calls
@@ -60,3 +60,13 @@
 - `content` (required): text or Markdown content.
 
 The document is extracted, chunked, embedded and indexed immediately.
+
+## `rag_reindex`
+
+- `force` (optional, default `false`): trigger a **full rebuild** instead of an
+  incremental scan. When `true`, all chunks and files are purged from the index
+  (KB folders are kept), then every document is re-extracted, re-chunked and
+  re-embedded. Use it after enabling [contextual chunking](./configuration#contextual-chunking)
+  or changing an indexing option, so previously indexed documents pick up the new
+  embeddings. Without `force` (or when the argument is omitted) it is a plain
+  incremental scan and unchanged files are skipped.

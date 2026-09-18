@@ -83,8 +83,10 @@ Opt-in and default-off. `CONTEXTUAL_CHUNKING_BASE_URL` defaults to
 since it is called once per chunk at index time. When the LLM is unreachable,
 the chunk is embedded raw so indexing never fails.
 
-> Note — enabling contextual chunking changes embeddings, so **re-run a scan**
-> (`rag_reindex` / `/admin/reindex`) for previously indexed KBs to benefit.
+> Note — enabling contextual chunking changes embeddings, so **rebuild the index
+> from scratch** (`rag_reindex { force: true }` via MCP, or
+> `POST /admin/reindex?force=true` via REST) for previously indexed KBs to
+> benefit. A plain incremental scan skips unchanged files.
 
 ## Storage backends
 

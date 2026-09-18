@@ -4,17 +4,17 @@ All endpoints except `/health` require a Bearer token (`MCP_API_KEY`). `rag-hub-
 
 ## Endpoints
 
-| Endpoint                            | Method | Auth   | Description                            |
-| ----------------------------------- | ------ | ------ | -------------------------------------- |
-| `/health`                           | GET    | —      | Health check                           |
-| `/admin/kbs`                        | GET    | Bearer | List KBs                               |
-| `/admin/kbs/:kb/documents`          | GET    | Bearer | List documents                         |
-| `/admin/kbs/:kb/documents`          | POST   | Bearer | Add document (`json: {path, content}`) |
-| `/admin/kbs/:kb/documents/*`        | DELETE | Bearer | Delete document                        |
-| `/admin/kbs/:kb`                    | DELETE | Bearer | Delete KB                              |
-| `/admin/reindex`                    | POST   | Bearer | Force reindex                          |
-| `/admin/status`                     | GET    | Bearer | Index status                           |
-| `/search?query=...&kb=...&top_k=10` | GET    | Bearer | Search                                 |
+| Endpoint                            | Method | Auth   | Description                                              |
+| ----------------------------------- | ------ | ------ | -------------------------------------------------------- |
+| `/health`                           | GET    | —      | Health check                                             |
+| `/admin/kbs`                        | GET    | Bearer | List KBs                                                 |
+| `/admin/kbs/:kb/documents`          | GET    | Bearer | List documents                                           |
+| `/admin/kbs/:kb/documents`          | POST   | Bearer | Add document (`json: {path, content}`)                   |
+| `/admin/kbs/:kb/documents/*`        | DELETE | Bearer | Delete document                                          |
+| `/admin/kbs/:kb`                    | DELETE | Bearer | Delete KB                                                |
+| `/admin/reindex`                    | POST   | Bearer | Rescan for changes (`?force=true` rebuilds from scratch) |
+| `/admin/status`                     | GET    | Bearer | Index status                                             |
+| `/search?query=...&kb=...&top_k=10` | GET    | Bearer | Search                                                   |
 
 ## Examples
 
@@ -36,6 +36,12 @@ curl -X POST -H "Authorization: Bearer my-secret-key" \
   -H "Content-Type: application/json" \
   -d '{"path": "notes/setup.md", "content": "# Setup\n…"}' \
   http://localhost:8000/admin/kbs/dev/documents
+
+# Rescan for changes (incremental)
+curl -X POST -H "Authorization: Bearer my-secret-key" http://localhost:8000/admin/reindex
+
+# Rebuild the entire index from scratch (purges chunks & files, re-embeds everything)
+curl -X POST -H "Authorization: Bearer my-secret-key" "http://localhost:8000/admin/reindex?force=true"
 ```
 
 ## MCP over HTTP

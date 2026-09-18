@@ -345,6 +345,37 @@ describe('MCP streamable-http endpoint (per-session transports)', () => {
     expect(callText?.content?.[0]?.text ?? '').not.toContain('No results found.')
   })
 
+  test('should rebuild the full index when rag_reindex runs with force=true', async () => {
+    const sessionId = await initialize(base)
+    const kb = 'forcereindex'
+    writeKbDocument(process.env.KB_ROOT as string, kb, 'a.md', 'initial content payload')
+    // Index once.
+    await postSse(base, { jsonrpc: '2.0', id: 23, method: 'tools/call', params: { name: 'rag_reindex', arguments: {} } }, sessionId)
+
+    // A plain scan would skip the unchanged file; force must purge & rebuild it.
+    const force = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 24, method: 'tools/call', params: { name: 'rag_reindex', arguments: { force: true } } },
+      sessionId,
+    )
+    expect(force.res.status).toBe(200)
+    const forceText = force.messages.find(m => m.id === 24)?.result as { content?: Array<{ text?: string }> }
+    // force=true re-indexes every KB in the (shared) KB_ROOT, so files from other
+    // tests are included. The key assertion: unchanged files are NOT skipped (=0),
+    // proving the full rebuild purges and re-embeds everything.
+    expect(forceText?.content?.[0]?.text ?? '').toMatch(/=0 x0/)
+    expect(forceText?.content?.[0]?.text ?? '').toMatch(/\+\d/)
+
+    // The chunk is still searchable after the rebuild.
+    const hit = await postSse(
+      base,
+      { jsonrpc: '2.0', id: 25, method: 'tools/call', params: { name: 'rag_search', arguments: { query: 'payload', kb } } },
+      sessionId,
+    )
+    const hitText = hit.messages.find(m => m.id === 25)?.result as { content?: Array<{ text?: string }> }
+    expect(hitText?.content?.[0]?.text ?? '').not.toContain('No results found.')
+  })
+
   test('should report status with per-KB stats', async () => {
     const sessionId = await initialize(base)
     writeKbDocument(process.env.KB_ROOT as string, 'statkb', 'a.md', 'alpha beta gamma')
