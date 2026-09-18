@@ -5,6 +5,7 @@ import fastGlob from 'fast-glob'
 import { env } from '../config.js'
 import { getLogger } from '../log.js'
 import { chunkText } from '../pipeline/chunk.js'
+import { enrichChunkContent } from '../pipeline/contextualChunking.js'
 import { embedTexts } from '../pipeline/embed.js'
 import { extractText } from '../pipeline/extract.js'
 import type { IngestResult, Store } from '../types.js'
@@ -185,7 +186,12 @@ export const indexFile = async (
   const chunks = chunkText(text, relPath, kbName, frontmatter)
   if (chunks.length === 0) return false
 
-  const texts = chunks.map(c => c.content)
+  const texts = await Promise.all(
+    chunks.map(c => {
+      const meta = JSON.parse(c.metadata) as { path?: string; headings?: string }
+      return enrichChunkContent(c.content, { path: meta.path ?? relPath, headings: meta.headings ?? '' })
+    }),
+  )
   let embeddings: Float32Array[] = []
   try {
     embeddings = await embedTexts(texts)

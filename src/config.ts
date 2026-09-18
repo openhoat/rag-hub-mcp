@@ -15,6 +15,12 @@ const EnvSchema = z.object({
   EMBEDDINGS_MODEL: z.string().default('bge-m3'),
   EMBEDDINGS_DIMENSION: z.coerce.number().int().min(1).default(1024),
   CHUNK_MAX_CHARS: z.coerce.number().int().min(1).default(3200),
+  CONTEXTUAL_CHUNKING_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform(v => v === 'true'),
+  CONTEXTUAL_CHUNKING_MODEL: z.string().optional(),
+  CONTEXTUAL_CHUNKING_BASE_URL: z.string().optional(),
   STORE_BACKEND: z.enum(['sqlite', 'postgres']).default('sqlite'),
   DATABASE_URL: z.string().optional(),
   PG_HOST: z.string().optional(),

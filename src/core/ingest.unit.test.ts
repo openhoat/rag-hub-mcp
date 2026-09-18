@@ -9,12 +9,16 @@ vi.mock('../pipeline/embed.js', () => ({
   embedTexts: vi.fn(async () => [new Float32Array([0.5, 0.5])]),
   cosineSimilarity: vi.fn(() => 0),
 }))
+vi.mock('../pipeline/contextualChunking.js', () => ({
+  enrichChunkContent: vi.fn(async (content: string) => content),
+}))
 vi.mock('../pipeline/extract.js', () => ({
   extractText: vi.fn(async () => ({ text: 'extracted content', frontmatter: null })),
   isTextFile: vi.fn(() => true),
   TEXT_EXTENSIONS: new Set(['.md']),
 }))
 
+import { enrichChunkContent } from '../pipeline/contextualChunking.js'
 import { embedTexts } from '../pipeline/embed.js'
 import { extractText } from '../pipeline/extract.js'
 import { addDocument, deleteDocument, deleteKb, indexFile, readDocument, scanAll } from './ingest.js'
@@ -68,6 +72,29 @@ describe('indexFile', () => {
     const chunks = await store.getAllChunks('docs')
     expect(chunks.length).toBeGreaterThan(1)
     expect(chunks.some(c => c.embedding !== null)).toBe(true)
+  })
+
+  test('should enrich chunk content via contextual chunking before embedding', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), '# heading\ncontent', 'utf-8')
+    await store.addKb('docs')
+    const kbId = (await store.getKbId('docs')) as number
+
+    // Single long paragraph so the chunker yields one chunk.
+    vi.mocked(extractText).mockImplementationOnce(async () => ({
+      text: `# heading\n\n${'paragraph content '.repeat(50)}`,
+      frontmatter: null,
+    }))
+
+    await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', { mtimeMs: 0, size: 40 })
+
+    expect(vi.mocked(enrichChunkContent)).toHaveBeenCalled()
+    const [content, context] = vi.mocked(enrichChunkContent).mock.calls[0]
+    expect(content).toContain('paragraph content')
+    expect(context?.path).toBe('a.md')
+    expect(context?.headings).toBe('heading')
   })
 })
 

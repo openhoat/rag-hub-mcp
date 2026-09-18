@@ -94,4 +94,18 @@ describe('config', () => {
     const { extraTextExtensions } = await importConfig()
     expect(extraTextExtensions.size).toBe(0)
   })
+
+  test('contextual chunking defaults to disabled', async () => {
+    const { env } = await importConfig()
+    expect(env.CONTEXTUAL_CHUNKING_ENABLED).toBe(false)
+    expect(env.CONTEXTUAL_CHUNKING_MODEL).toBeUndefined()
+  })
+
+  test('contextual chunking parses the enable flag', async () => {
+    process.env.CONTEXTUAL_CHUNKING_ENABLED = 'true'
+    process.env.CONTEXTUAL_CHUNKING_MODEL = 'qwen2.5:0.5b'
+    const { env } = await importConfig()
+    expect(env.CONTEXTUAL_CHUNKING_ENABLED).toBe(true)
+    expect(env.CONTEXTUAL_CHUNKING_MODEL).toBe('qwen2.5:0.5b')
+  })
 })
