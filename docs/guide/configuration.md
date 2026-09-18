@@ -4,30 +4,33 @@ All configuration is done through environment variables. Variables are validated
 
 ## Environment variables
 
-| Variable               | Default                                          | Description                                                                                                                                                                                      |
-| ---------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `MCP_API_KEY`          | _(required in HTTP)_                             | Bearer token for REST + MCP over HTTP. Ignored in stdio mode.                                                                                                                                    |
-| `EMBEDDINGS_BASE_URL`  | `http://localhost:11434/v1`                      | OpenAI-compatible `/v1/embeddings` endpoint.                                                                                                                                                     |
-| `EMBEDDINGS_API_KEY`   | _(none)_                                         | Bearer token for the embeddings API.                                                                                                                                                             |
-| `EMBEDDINGS_MODEL`     | `bge-m3`                                         | Embedding model name.                                                                                                                                                                            |
-| `EMBEDDINGS_DIMENSION` | `1024`                                           | Fixed vector dimension for the embedding column (bge-m3 = 1024). Used by the PostgreSQL backend to size the pgvector column.                                                                     |
-| `CHUNK_MAX_CHARS`      | `3200`                                           | Maximum characters per text chunk. Lower it for small-token embedding models. See [Chunk sizing](#chunk-sizing) below.                                                                           |
-| `KB_ROOT`              | `./kbs` (stdio) / `/data/kbs` (http)             | Root directory for knowledge base folders.                                                                                                                                                       |
-| `SCAN_INTERVAL`        | `300`                                            | Scan interval in seconds (0 = disabled). HTTP mode only.                                                                                                                                         |
-| `PORT`                 | `8000`                                           | HTTP listen port. HTTP mode only.                                                                                                                                                                |
-| `DB_PATH`              | `./rag.db` (stdio) / `/data/index/rag.db` (http) | SQLite database path.                                                                                                                                                                            |
-| `STORE_BACKEND`        | `sqlite`                                         | `sqlite` (default, standalone) or `postgres` (requires a reachable Postgres).                                                                                                                    |
-| `DATABASE_URL`         | _(none)_                                         | Postgres connection string. Takes precedence over the individual `PG_*` vars.                                                                                                                    |
-| `PG_HOST`              | `localhost`                                      | Postgres host.                                                                                                                                                                                   |
-| `PG_PORT`              | `5432`                                           | Postgres port.                                                                                                                                                                                   |
-| `PG_DATABASE`          | `raghub`                                         | Postgres database name.                                                                                                                                                                          |
-| `PG_USER`              | _(none)_                                         | Postgres user.                                                                                                                                                                                   |
-| `PG_PASSWORD`          | _(none)_                                         | Postgres password.                                                                                                                                                                               |
-| `PG_SSL`               | `false`                                          | Enable TLS for the Postgres connection.                                                                                                                                                          |
-| `CORS_ORIGINS`         | _(none)_                                         | Allowed CORS origins (comma-separated). Empty = disables the CORS restriction.                                                                                                                   |
-| `TEXT_EXTENSIONS`      | _(none)_                                         | Additional text extensions to index (comma-separated, e.g. `.kt,.java,.go`). Merged with the built-in list, not replacing it. Unknown extensions are also auto-detected as text via magic bytes. |
-| `RAG_TRANSPORT`        | `stdio`                                          | `stdio` or `http`. The `--http` flag wins.                                                                                                                                                       |
-| `VERSION`              | `1.2.1`                                          | Reported version.                                                                                                                                                                                |
+| Variable                       | Default                                          | Description                                                                                                                                                                                      |
+| ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MCP_API_KEY`                  | _(required in HTTP)_                             | Bearer token for REST + MCP over HTTP. Ignored in stdio mode.                                                                                                                                    |
+| `EMBEDDINGS_BASE_URL`          | `http://localhost:11434/v1`                      | OpenAI-compatible `/v1/embeddings` endpoint.                                                                                                                                                     |
+| `EMBEDDINGS_API_KEY`           | _(none)_                                         | Bearer token for the embeddings API.                                                                                                                                                             |
+| `EMBEDDINGS_MODEL`             | `bge-m3`                                         | Embedding model name.                                                                                                                                                                            |
+| `EMBEDDINGS_DIMENSION`         | `1024`                                           | Fixed vector dimension for the embedding column (bge-m3 = 1024). Used by the PostgreSQL backend to size the pgvector column.                                                                     |
+| `CHUNK_MAX_CHARS`              | `3200`                                           | Maximum characters per text chunk. Lower it for small-token embedding models. See [Chunk sizing](#chunk-sizing) below.                                                                           |
+| `CONTEXTUAL_CHUNKING_ENABLED`  | `false`                                          | At indexing time, generate a short context sentence per chunk (via the configured LLM) that is prepended to the chunk before embedding. See [Contextual chunking](#contextual-chunking) below.   |
+| `CONTEXTUAL_CHUNKING_BASE_URL` | `EMBEDDINGS_BASE_URL`                            | OpenAI-compatible `/v1/chat/completions` endpoint used to generate chunk context. Defaults to the embeddings base URL.                                                                           |
+| `CONTEXTUAL_CHUNKING_MODEL`    | `phi3:minimal`                                   | Lightweight LLM that writes the per-chunk context sentence.                                                                                                                                      |
+| `KB_ROOT`                      | `./kbs` (stdio) / `/data/kbs` (http)             | Root directory for knowledge base folders.                                                                                                                                                       |
+| `SCAN_INTERVAL`                | `300`                                            | Scan interval in seconds (0 = disabled). HTTP mode only.                                                                                                                                         |
+| `PORT`                         | `8000`                                           | HTTP listen port. HTTP mode only.                                                                                                                                                                |
+| `DB_PATH`                      | `./rag.db` (stdio) / `/data/index/rag.db` (http) | SQLite database path.                                                                                                                                                                            |
+| `STORE_BACKEND`                | `sqlite`                                         | `sqlite` (default, standalone) or `postgres` (requires a reachable Postgres).                                                                                                                    |
+| `DATABASE_URL`                 | _(none)_                                         | Postgres connection string. Takes precedence over the individual `PG_*` vars.                                                                                                                    |
+| `PG_HOST`                      | `localhost`                                      | Postgres host.                                                                                                                                                                                   |
+| `PG_PORT`                      | `5432`                                           | Postgres port.                                                                                                                                                                                   |
+| `PG_DATABASE`                  | `raghub`                                         | Postgres database name.                                                                                                                                                                          |
+| `PG_USER`                      | _(none)_                                         | Postgres user.                                                                                                                                                                                   |
+| `PG_PASSWORD`                  | _(none)_                                         | Postgres password.                                                                                                                                                                               |
+| `PG_SSL`                       | `false`                                          | Enable TLS for the Postgres connection.                                                                                                                                                          |
+| `CORS_ORIGINS`                 | _(none)_                                         | Allowed CORS origins (comma-separated). Empty = disables the CORS restriction.                                                                                                                   |
+| `TEXT_EXTENSIONS`              | _(none)_                                         | Additional text extensions to index (comma-separated, e.g. `.kt,.java,.go`). Merged with the built-in list, not replacing it. Unknown extensions are also auto-detected as text via magic bytes. |
+| `RAG_TRANSPORT`                | `stdio`                                          | `stdio` or `http`. The `--http` flag wins.                                                                                                                                                       |
+| `VERSION`                      | `1.2.1`                                          | Reported version.                                                                                                                                                                                |
 
 ## Recommended embedding models
 
@@ -60,6 +63,28 @@ model in another language.
 
 Lower `CHUNK_MAX_CHARS` when you use a small-token model (e.g. 512) or dense
 scripts. The 400-character overlap is preserved independently of this value.
+
+## Contextual chunking
+
+When enabled, a lightweight LLM writes a short context sentence for each chunk
+at indexing time. That sentence is prepended to the chunk **only when
+computing the embedding** — the stored content stays unchanged. This anchors the
+vector to its place in the document, improving search precision at zero runtime
+latency (the cost is paid once, per chunk, when re-indexing).
+
+```bash
+CONTEXTUAL_CHUNKING_ENABLED=true \
+CONTEXTUAL_CHUNKING_BASE_URL=http://localhost:11434/v1 \
+CONTEXTUAL_CHUNKING_MODEL=phi3:minimal
+```
+
+Opt-in and default-off. `CONTEXTUAL_CHUNKING_BASE_URL` defaults to
+`EMBEDDINGS_BASE_URL`; pick a light model (`phi3:minimal`, `qwen2.5:0.5b`, …)
+since it is called once per chunk at index time. When the LLM is unreachable,
+the chunk is embedded raw so indexing never fails.
+
+> Note — enabling contextual chunking changes embeddings, so **re-run a scan**
+> (`rag_reindex` / `/admin/reindex`) for previously indexed KBs to benefit.
 
 ## Storage backends
 

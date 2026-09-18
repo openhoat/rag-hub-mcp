@@ -29,6 +29,7 @@ graph TD
     subgraph PIPELINE["pipeline — text processing"]
         EXTRACT["extract.ts"]
         CHUNK["chunk.ts"]
+        CONTEXT["contextualChunking.ts<br/>opt-in LLM context"]
         EMBED["embed.ts"]
     end
 
@@ -47,6 +48,7 @@ graph TD
     INGEST --> PGSTORE
     INGEST --> EXTRACT
     INGEST --> CHUNK
+    INGEST --> CONTEXT
     INGEST --> EMBED
     SEARCH --> EMBED
     SEARCH --> STORE
@@ -69,7 +71,8 @@ graph LR
     RE --> EXTR
     REMOD --> EXTR
     EXTR --> CH["chunk.ts<br/>max 3200, overlap 400, headings"]
-    CH --> EMB["embed.ts<br/>batch 16 / OpenAI-compatible"]
+    CH --> CC["contextualChunking.ts<br/>opt-in: LLM context per chunk"]
+    CC --> EMB["embed.ts<br/>batch 16 / OpenAI-compatible"]
     EMB --> DB[("SQLite<br/>kbs · files · chunks · fts_chunks")]
 ```
 
@@ -77,6 +80,7 @@ graph LR
 - Top-level subfolders are KBs, named after the folder.
 - Each file is hashed (SHA-256): only new or modified files are re-encoded.
 - Deleted files and orphaned KBs are purged from the index (`cleanupStale`).
+- **Contextual chunking** (opt-in): when `CONTEXTUAL_CHUNKING_ENABLED` is true, the chunk stage asks a lightweight LLM for a short context sentence and prepends it to the chunk before embedding. Only the embedding input is enriched — stored content is unchanged. See [configuration → contextual chunking](./configuration#contextual-chunking).
 
 ### Skip / modify / add decision
 
