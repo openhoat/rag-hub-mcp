@@ -160,6 +160,10 @@ graph LR
 - **Keyword**: FTS5 scores weighted 0.35. The MATCH query is built as `'"word1" AND "word2"'` over words longer than 2 characters.
 - **Fallback**: if embedding fails or FTS5 is unavailable, it falls back to a per-word `indexOf` match.
 - The KB filter is applied via `getAllChunks(kb)`; the merged score sorts and returns the `topK` results with their citations (`kb`, `relPath`, `chunkIndex`).
+- **Contextual chunking is transparent to search**: when enabled, chunk embeddings
+  are enriched at index time with a LLM-generated context sentence. The hybrid
+  search path is unchanged — it compares the query against these already-enriched
+  vectors with no additional LLM call and no runtime latency.
 
 ## Transport models
 
