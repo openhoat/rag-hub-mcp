@@ -2,17 +2,17 @@
 
 `rag-hub-mcp` exposes 9 tools over the Model Context Protocol. Any MCP-compatible agent (opencode, Claude Code, Cline…) can call them.
 
-| Tool                  | Description                                                   |
-| --------------------- | ------------------------------------------------------------- |
-| `rag_list_kbs`        | List knowledge bases with stats                               |
-| `rag_list_documents`  | List documents in a KB                                        |
-| `rag_search`          | Search KBs (`kb` optional — omitting searches all)            |
-| `rag_add_document`    | Add a text document (creates folder if needed)                |
-| `rag_read`            | Retrieve the full extracted content of a document (KB + path) |
-| `rag_delete_document` | Delete a document                                             |
-| `rag_delete_kb`       | Delete an entire KB                                           |
-| `rag_reindex`         | Trigger an immediate scan                                     |
-| `rag_status`          | Index overview (KBs, documents, chunks)                       |
+| Tool                  | Description                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| `rag_list_kbs`        | List knowledge bases with stats                                                                    |
+| `rag_list_documents`  | List documents in a KB                                                                             |
+| `rag_search`          | Search KBs (`kb` optional — omitting searches all). Write a self-contained query with full context |
+| `rag_add_document`    | Add a text document (creates folder if needed)                                                     |
+| `rag_read`            | Retrieve the full extracted content of a document (KB + path)                                      |
+| `rag_delete_document` | Delete a document                                                                                  |
+| `rag_delete_kb`       | Delete an entire KB                                                                                |
+| `rag_reindex`         | Trigger an immediate scan                                                                          |
+| `rag_status`          | Index overview (KBs, documents, chunks)                                                            |
 
 ## Example calls
 
@@ -46,7 +46,10 @@
 
 ## `rag_search`
 
-- `query` (required): natural-language search query.
+- `query` (required): natural-language search query. **Write it self-contained with
+  full context** (e.g. "API v2 rate limits", not "the other version") — the server is
+  stateless, so follow-up references from the conversation are resolved client-side
+  before the call.
 - `kb` (optional): restrict to one knowledge base.
 - `top_k` (optional, default 10): number of results.
 
