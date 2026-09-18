@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { type ContextualChunkingConfig, defaultConfig, enrichChunkContent } from './contextualChunking.js'
+import { type ContextualChunkingConfig, defaultConfig, enrichChunkContent } from './contextual-chunking.js'
 
 const config = (overrides: Partial<ContextualChunkingConfig> = {}): ContextualChunkingConfig => ({
   enabled: true,

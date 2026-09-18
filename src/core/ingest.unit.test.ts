@@ -9,7 +9,7 @@ vi.mock('../pipeline/embed.js', () => ({
   embedTexts: vi.fn(async () => [new Float32Array([0.5, 0.5])]),
   cosineSimilarity: vi.fn(() => 0),
 }))
-vi.mock('../pipeline/contextualChunking.js', () => ({
+vi.mock('../pipeline/contextual-chunking.js', () => ({
   enrichChunkContent: vi.fn(async (content: string) => content),
 }))
 vi.mock('../pipeline/extract.js', () => ({
@@ -22,7 +22,7 @@ vi.mock('../pipeline/extract.js', () => ({
   TEXT_EXTENSIONS: new Set(['.md']),
 }))
 
-import { enrichChunkContent } from '../pipeline/contextualChunking.js'
+import { enrichChunkContent } from '../pipeline/contextual-chunking.js'
 import { embedTexts } from '../pipeline/embed.js'
 import { extractText, isBinaryContent } from '../pipeline/extract.js'
 import { addDocument, deleteDocument, deleteKb, forceReindex, indexFile, readDocument, scanAll } from './ingest.js'
