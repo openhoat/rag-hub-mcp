@@ -13,7 +13,9 @@ const dbCleanup = (): void => {
       rmSync(dbPath, { force: true })
       rmSync(dbPath + '-wal', { force: true })
       rmSync(dbPath + '-shm', { force: true })
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -89,7 +91,7 @@ describe('SqliteJobQueue', () => {
     await queue.fail(job.id, 'err')
     let s = await queue.stats()
     expect(s.failed).toBe(1)
-    
+
     const failed = await queue.failedList()
     await queue.retryJob(failed[0].id)
     s = await queue.stats()
@@ -112,7 +114,7 @@ describe('SqliteJobQueue', () => {
     await queue.fail(job.id, 'err3')
     const s1 = await queue.stats()
     expect(s1.failed).toBe(1)
-    
+
     // Re-enqueue the same file — should reset failed to pending
     await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
     const s2 = await queue.stats()
