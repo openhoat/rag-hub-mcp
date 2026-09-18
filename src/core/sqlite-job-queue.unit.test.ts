@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createSqliteJobQueue } from './sqlite-job-queue.js'
 
 let dbPath: string
@@ -100,10 +100,23 @@ describe('SqliteJobQueue', () => {
   })
 
   test('reclaimStale resets processing jobs', async () => {
-    await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
-    await queue.claim(1)
-    const reclaimed = await queue.reclaimStale(0)
-    expect(reclaimed).toBe(0)
+    vi.useFakeTimers()
+    try {
+      const base = 1_700_000_000_000
+      vi.setSystemTime(base)
+      await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
+      await queue.claim(1)
+      // Same timestamp is not stale (started_at < cutoff → strict <)
+      expect(await queue.reclaimStale(0)).toBe(0)
+      // 60s later, 30s threshold: job is stale → reclaimed back to pending
+      vi.setSystemTime(base + 60_000)
+      expect(await queue.reclaimStale(30)).toBe(1)
+      const s = await queue.stats()
+      expect(s.pending).toBe(1)
+      expect(s.processing).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('enqueue idempotency: re-enqueue resets failed', async () => {
