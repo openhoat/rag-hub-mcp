@@ -120,6 +120,28 @@ const normalizeInput = (payload: { input?: string | string[] }): string[] => {
  * embedding per text (dimension chosen by the caller). Returns a restore fn.
  */
 export const stubEmbeddingsApi = (makeEmbeddings: (inputTexts: string[]) => number[][]): (() => void) => {
+  return stubLlmApi(makeEmbeddings)
+}
+
+/** Deterministic unit vectors that give cosine similarity ~1 between any pair. */
+export const unitEmbeddings = (dimension = 4): number[] => {
+  return Array.from({ length: dimension }, (_, i) => (i === 0 ? 1 : 0))
+}
+
+/**
+ * Stub the global fetch so that ONLY `/embeddings` and `/chat/completions`
+ * OpenAI/Ollama-compatible endpoints are intercepted. All other requests
+ * (including the test's own calls to a local HTTP server) pass through to the
+ * real fetch.
+ *
+ * `makeEmbeddings` receives the array of input texts and must return one
+ * embedding per text. `makeContext` receives the chat payload and must return a
+ * context sentence. Returns a restore fn.
+ */
+export const stubLlmApi = (
+  makeEmbeddings: (inputTexts: string[]) => number[][],
+  makeContext?: (payload: { messages: Array<{ content: string }> }) => string,
+): (() => void) => {
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = resolveUrl(input)
@@ -133,14 +155,18 @@ export const stubEmbeddingsApi = (makeEmbeddings: (inputTexts: string[]) => numb
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    if (url.endsWith('/chat/completions')) {
+      const rawBody = init?.body
+      const payload = typeof rawBody === 'string' ? (JSON.parse(rawBody) as { messages: Array<{ content: string }> }) : { messages: [] }
+      const content = makeContext ? makeContext(payload) : 'context sentence stub'
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     return prev(input, init)
   }) as typeof fetch
   return () => {
     globalThis.fetch = prev
   }
-}
-
-/** Deterministic unit vectors that give cosine similarity ~1 between any pair. */
-export const unitEmbeddings = (dimension = 4): number[] => {
-  return Array.from({ length: dimension }, (_, i) => (i === 0 ? 1 : 0))
 }
