@@ -40,7 +40,7 @@ const EnvSchema = z.object({
   // Additional text file extensions to index, comma-separated (e.g. ".kt,.java").
   // Merged with the built-in list at extract time, not a replacement.
   TEXT_EXTENSIONS: z.string().default(''),
-  VERSION: z.string().default('1.2.1'),
+  VERSION: z.string().default('1.3.0'),
   RAG_TRANSPORT: z.enum(['stdio', 'http']).optional(),
   LOG_LEVEL: z.string().default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),

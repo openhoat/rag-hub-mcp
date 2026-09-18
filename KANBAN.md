@@ -28,10 +28,6 @@
 
 ## In Progress
 
-### #13 [FEAT] Contextual chunking: LLM-generated context prepended to chunk embeddings (P2)
-
-- [x] Implementation
-
 ### #12 [ARCHITECTURE] Async indexing via job queue + worker (P2)
 
 - [ ] JobQueue interface + SqliteJobQueue + PgJobQueue (store table, future Redis pluggable)
