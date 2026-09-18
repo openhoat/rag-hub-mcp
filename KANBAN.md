@@ -30,9 +30,9 @@
 
 ### #12 [ARCHITECTURE] Async indexing via job queue + worker (P2)
 
-- [ ] JobQueue interface + SqliteJobQueue + PgJobQueue (store table, future Redis pluggable)
-- [ ] scanAll → producer (enqueue jobs, return ScanResult)
-- [ ] Worker consumer loop (concurrency, retry, stale reclaim) — runs in stdio + HTTP
-- [ ] Config: INDEXER_CONCURRENCY=4, INDEXER_RETRY_MAX=3, INDEXER_STALE_TIMEOUT=300
-- [ ] Observabilité: rag_status + /admin/status + /admin/jobs (pending/processing/failed)
-- [ ] Tests + validation
+- [x] JobQueue interface + SqliteJobQueue + PgJobQueue (store table, future Redis pluggable)
+- [x] scanAll → producer (enqueue jobs, return ScanResult)
+- [x] Worker consumer loop (concurrency, retry, stale reclaim) — runs in stdio + HTTP
+- [x] Config: INDEXER_CONCURRENCY=4, INDEXER_RETRY_MAX=3, INDEXER_STALE_TIMEOUT=300
+- [x] Observabilité: rag_jobs (MCP) + /admin/status + /admin/jobs (pending/processing/failed)
+- [x] Tests + validation
