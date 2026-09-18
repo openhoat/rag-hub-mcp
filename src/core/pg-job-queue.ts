@@ -103,6 +103,7 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
   }
 
   const reclaimStale = async (timeoutSeconds: number): Promise<number> => {
+    await ensureMigrated()
     const cutoff = new Date(Date.now() - timeoutSeconds * 1000).toISOString()
     const res = await db.query<Record<string, unknown>>(
       'UPDATE jobs SET status = $1, started_at = NULL WHERE status = $2 AND started_at < $3 RETURNING id',
@@ -112,6 +113,7 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
   }
 
   const stats = async (): Promise<JobStats> => {
+    await ensureMigrated()
     const res = await db.query<{ status: string; cnt: number }>(
       "SELECT status, COUNT(*)::int AS cnt FROM jobs WHERE status IN ('pending', 'processing', 'failed') GROUP BY status",
     )

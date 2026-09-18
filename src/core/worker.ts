@@ -32,7 +32,7 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
         })
       }
     } catch (err) {
-      logger.error('worker poll failed', err)
+      logger.error('worker poll failed: %s', err instanceof Error ? err.message : String(err))
     }
   }
 
