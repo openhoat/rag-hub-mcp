@@ -59,7 +59,8 @@ export const createMcpServer = (store: Store): McpServer => {
   server.registerTool(
     'rag_search',
     {
-      description: 'Search knowledge bases. kb is optional: without kb searches all.',
+      description:
+        'Search knowledge bases. Write a self-contained query with full context (e.g. "API v2 rate limits", not "the other version"). kb is optional: without kb searches all.',
       inputSchema: searchArgs,
     },
     async args => handleToolCall(store, 'rag_search', args),
