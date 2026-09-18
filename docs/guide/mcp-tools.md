@@ -1,6 +1,6 @@
 # MCP tools
 
-`rag-hub-mcp` exposes 9 tools over the Model Context Protocol. Any MCP-compatible agent (opencode, Claude Code, Cline…) can call them.
+`rag-hub-mcp` exposes 10 tools over the Model Context Protocol. Any MCP-compatible agent (opencode, Claude Code, Cline…) can call them.
 
 | Tool                  | Description                                                                                        |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
@@ -11,8 +11,9 @@
 | `rag_read`            | Retrieve the full extracted content of a document (KB + path)                                      |
 | `rag_delete_document` | Delete a document                                                                                  |
 | `rag_delete_kb`       | Delete an entire KB                                                                                |
-| `rag_reindex`         | Scan for changes (`force: true` rebuilds from scratch)                                             |
-| `rag_status`          | Index overview (KBs, documents, chunks)                                                            |
+| `rag_reindex`         | Scan for changes (`force: true` rebuilds from scratch) — enqueues jobs, returns counts             |
+| `rag_status`          | Index overview (KBs, documents, chunks) + queue stats                                              |
+| `rag_jobs`            | Indexing queue status (pending/processing/failed) and recent failures                              |
 
 ## Example calls
 
@@ -41,7 +42,7 @@
     "content": "# Setup\n…"
   }
 }
-// → added + indexed
+// → added + queued for indexing
 ```
 
 ## `rag_search`
@@ -59,14 +60,26 @@
 - `path` (required): relative path in the KB (e.g. `notes/architecture.md`).
 - `content` (required): text or Markdown content.
 
-The document is extracted, chunked, embedded and indexed immediately.
+The document is queued for indexing and processed asynchronously by the worker (extract → chunk → embed → insert). Use `rag_jobs` to check progress.
 
 ## `rag_reindex`
 
 - `force` (optional, default `false`): trigger a **full rebuild** instead of an
   incremental scan. When `true`, all chunks and files are purged from the index
-  (KB folders are kept), then every document is re-extracted, re-chunked and
-  re-embedded. Use it after enabling [contextual chunking](./configuration#contextual-chunking)
+  (KB folders are kept), then every document is re-queued for indexing. Use it
+  after enabling [contextual chunking](./configuration#contextual-chunking)
   or changing an indexing option, so previously indexed documents pick up the new
   embeddings. Without `force` (or when the argument is omitted) it is a plain
-  incremental scan and unchanged files are skipped.
+  incremental scan — unchanged files are skipped, new/modified files are enqueued.
+
+The scan returns added/modified/deleted/skipped/excluded counts. Actual indexing happens asynchronously in the worker — results appear once the worker has processed the enqueued jobs.
+
+## `rag_jobs`
+
+Queue status without arguments.
+
+```text
+Queue: 2 pending, 1 processing, 0 failed
+```
+
+Failed jobs are parked after `INDEXER_RETRY_MAX` attempts. Retry them manually via the REST API (`POST /admin/jobs/:id/retry`).

@@ -19,7 +19,7 @@ Most RAG setups need a vector database, a chunking pipeline, an embeddings servi
 
 - **Folders are knowledge bases** — a 1st-level folder is a KB, named after the folder. No schema, no UI.
 - **Zero infrastructure** — one SQLite database with FTS5 by default. No vector DB, no server to keep running. (Optional PostgreSQL + pgvector backend for server-side deployments.)
-- **MCP-native** — 9 tools over the Model Context Protocol, so any agent can use it in seconds.
+- **MCP-native** — 10 tools over the Model Context Protocol, so any agent can use it in seconds.
 - **Hybrid search** — vector cosine similarity fused with full-text keyword search (SQLite FTS5 or PostgreSQL `ts_rank`).
 
 ## How it works
@@ -27,9 +27,9 @@ Most RAG setups need a vector database, a chunking pipeline, an embeddings servi
 ```text
 ./kbs/ — folders = knowledge bases
   │
-  │  scan (SHA-256 diff)
+  │  scan (SHA-256 diff) → enqueue index jobs
   ▼
-extract → chunk → embed
+worker (async, concurrent) → extract → chunk → embed
   │  bge-m3 / any OpenAI-compatible API
   ▼
 ┌─────────────────────────────┐
@@ -103,19 +103,20 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 
 ## MCP tools & REST API
 
-**9 tools over MCP**, callable from any MCP-compatible agent:
+**10 tools over MCP**, callable from any MCP-compatible agent:
 
-| Tool                  | Description                                   |
-| --------------------- | --------------------------------------------- |
-| `rag_list_kbs`        | List KBs with stats                           |
-| `rag_list_documents`  | List documents in a KB                        |
-| `rag_search`          | Hybrid search (`kb` optional)                 |
-| `rag_add_document`    | Add a text document                           |
-| `rag_read`            | Retrieve full extracted content of a document |
-| `rag_delete_document` | Delete a document                             |
-| `rag_delete_kb`       | Delete an entire KB                           |
-| `rag_reindex`         | Trigger an immediate scan                     |
-| `rag_status`          | Index overview (KBs, documents, chunks)       |
+| Tool                  | Description                                              |
+| --------------------- | -------------------------------------------------------- |
+| `rag_list_kbs`        | List KBs with stats                                      |
+| `rag_list_documents`  | List documents in a KB                                   |
+| `rag_search`          | Hybrid search (`kb` optional)                            |
+| `rag_add_document`    | Add a text document                                      |
+| `rag_read`            | Retrieve full extracted content of a document            |
+| `rag_delete_document` | Delete a document                                        |
+| `rag_delete_kb`       | Delete an entire KB                                      |
+| `rag_reindex`         | Scan for changes (enqueues index jobs — async)           |
+| `rag_status`          | Index overview + queue stats (pending/processing/failed) |
+| `rag_jobs`            | Indexing queue status and recent failures                |
 
 **Small REST API** (`--http` mode), all endpoints except `/health` require `MCP_API_KEY`:
 

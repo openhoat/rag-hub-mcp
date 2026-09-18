@@ -17,6 +17,9 @@ All configuration is done through environment variables. Variables are validated
 | `CONTEXTUAL_CHUNKING_MODEL`    | `phi3:minimal`                                   | Lightweight LLM that writes the per-chunk context sentence.                                                                                                                                      |
 | `KB_ROOT`                      | `./kbs` (stdio) / `/data/kbs` (http)             | Root directory for knowledge base folders.                                                                                                                                                       |
 | `SCAN_INTERVAL`                | `300`                                            | Scan interval in seconds (0 = disabled). HTTP mode only.                                                                                                                                         |
+| `INDEXER_CONCURRENCY`          | `4`                                              | Number of index jobs processed in parallel by the async worker.                                                                                                                                  |
+| `INDEXER_RETRY_MAX`            | `3`                                              | Attempts before a failed job is parked (manual retry via `/admin/jobs/:id/retry`).                                                                                                               |
+| `INDEXER_STALE_TIMEOUT`        | `300`                                            | Seconds before a `processing` job orphaned by a crash is reclaimed as `pending`.                                                                                                                 |
 | `PORT`                         | `8000`                                           | HTTP listen port. HTTP mode only.                                                                                                                                                                |
 | `DB_PATH`                      | `./rag.db` (stdio) / `/data/index/rag.db` (http) | SQLite database path.                                                                                                                                                                            |
 | `STORE_BACKEND`                | `sqlite`                                         | `sqlite` (default, standalone) or `postgres` (requires a reachable Postgres).                                                                                                                    |
@@ -127,6 +130,10 @@ In stdio mode, logs go to stderr (stdout is reserved for JSON-RPC); there is no 
 
 ## Scan behavior
 
+Indexing is asynchronous. The **producer** (`scanAll`) discovers files on disk, computes their SHA-256, compares with known records, and **enqueues index jobs**. A background **worker** picks up jobs, processes them with configurable concurrency (`INDEXER_CONCURRENCY`), and handles retries.
+
+- **Sync fallback for tests** — e2e tests use a `createSyncTestQueue` helper that processes jobs immediately on enqueue, preserving the synchronous test pattern without a running worker.
+- **File records are not created by the producer** — they appear only once the worker has successfully indexed the chunks. Until then, the file is unknown to the index and will be re-enqueued on the next scan.
 - **Skipped vs excluded** — the scan tally (`+added ~modified -deleted =skipped xexcluded`)
   distinguishes files that are unchanged (`skipped`) from files that were scanned but
   not indexed because they have no extractable text (`excluded`, i.e. binary or empty).
@@ -136,3 +143,10 @@ In stdio mode, logs go to stderr (stdout is reserved for JSON-RPC); there is no 
   automatically re-indexed (content unchanged is not enough to skip it), so no manual
   table wipe is needed to recover. The scan log reports these as
   `re-indexing (null embeddings)`.
+- **Failed jobs** — after `INDEXER_RETRY_MAX` failed attempts a job is parked with
+  `status=failed`. It stays visible in `GET /admin/jobs` and can be retried manually
+  via `POST /admin/jobs/:id/retry`. The scan never re-enqueues a parked job (no
+  infinite retry loop).
+- **Crash recovery** — the `reclaimStale` mechanism runs every poll cycle: any job
+  stuck in `processing` for longer than `INDEXER_STALE_TIMEOUT` seconds is reset to
+  `pending` so the worker can pick it up again.

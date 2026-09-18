@@ -9,11 +9,13 @@ All endpoints except `/health` require a Bearer token (`MCP_API_KEY`). `rag-hub-
 | `/health`                           | GET    | —      | Health check                                             |
 | `/admin/kbs`                        | GET    | Bearer | List KBs                                                 |
 | `/admin/kbs/:kb/documents`          | GET    | Bearer | List documents                                           |
-| `/admin/kbs/:kb/documents`          | POST   | Bearer | Add document (`json: {path, content}`)                   |
+| `/admin/kbs/:kb/documents`          | POST   | Bearer | Add document (`json: {path, content}`) — queued          |
 | `/admin/kbs/:kb/documents/*`        | DELETE | Bearer | Delete document                                          |
 | `/admin/kbs/:kb`                    | DELETE | Bearer | Delete KB                                                |
 | `/admin/reindex`                    | POST   | Bearer | Rescan for changes (`?force=true` rebuilds from scratch) |
-| `/admin/status`                     | GET    | Bearer | Index status                                             |
+| `/admin/status`                     | GET    | Bearer | Index status + queue stats                               |
+| `/admin/jobs`                       | GET    | Bearer | Queue stats + failed jobs list                           |
+| `/admin/jobs/:id/retry`             | POST   | Bearer | Retry a failed job                                       |
 | `/search?query=...&kb=...&top_k=10` | GET    | Bearer | Search                                                   |
 
 ## Examples
@@ -31,17 +33,25 @@ curl -G -H "Authorization: Bearer my-secret-key" \
   --data-urlencode "top_k=10" \
   http://localhost:8000/search
 
-# Add a document
+# Add a document (queued for indexing)
 curl -X POST -H "Authorization: Bearer my-secret-key" \
   -H "Content-Type: application/json" \
   -d '{"path": "notes/setup.md", "content": "# Setup\n…"}' \
   http://localhost:8000/admin/kbs/dev/documents
+# → {"status": "queued", "kb": "dev", "path": "notes/setup.md"}
 
-# Rescan for changes (incremental)
+# Rescan for changes (incremental — enqueues jobs)
 curl -X POST -H "Authorization: Bearer my-secret-key" http://localhost:8000/admin/reindex
 
-# Rebuild the entire index from scratch (purges chunks & files, re-embeds everything)
+# Rebuild the entire index from scratch (purges chunks & files, re-queues everything)
 curl -X POST -H "Authorization: Bearer my-secret-key" "http://localhost:8000/admin/reindex?force=true"
+
+# Queue status and failed jobs
+curl -H "Authorization: Bearer my-secret-key" http://localhost:8000/admin/jobs
+
+# Retry a failed job
+curl -X POST -H "Authorization: Bearer my-secret-key" http://localhost:8000/admin/jobs/5/retry
+# → {"status": "retried", "id": 5}
 ```
 
 ## MCP over HTTP

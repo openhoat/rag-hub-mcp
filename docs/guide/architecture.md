@@ -1,6 +1,6 @@
 # Architecture
 
-`rag-hub-mcp` is a single process: it watches a root folder, ingests documents into a local index (SQLite by default), and exposes them via MCP and REST. Two storage backends implement the same `Store` interface — SQLite/FTS5 (default, self-contained) and PostgreSQL + pgvector (opt-in).
+`rag-hub-mcp` is a single process: it watches a root folder and exposes documents via MCP and REST. Indexing is asynchronous: a producer scans the filesystem and enqueues jobs; a background worker extracts, chunks, embeds, and inserts them. Two storage backends implement the same `Store` interface — SQLite/FTS5 (default, self-contained) and PostgreSQL + pgvector (opt-in).
 
 ## Layer view
 
@@ -9,27 +9,31 @@ Source code (`src/`) is organized into four layers, with dependencies pointing d
 ```mermaid
 graph TD
     subgraph BOOT["bootstrap"]
-        INDEX["index.ts<br/>transport selection, init, scan"]
+        INDEX["index.ts<br/>transport selection, init, queue + worker"]
         LOG["log.ts"]
     end
 
     subgraph TRANSPORT["transport — protocols"]
-        MCP["mcp.ts<br/>9 tools, zod, streamable-http"]
+        MCP["mcp.ts<br/>10 tools, zod, streamable-http"]
         REST["rest.ts<br/>Fastify /health /admin /search"]
     end
 
     subgraph CORE["core — business logic"]
-        FACTORY["storeFactory.ts<br/>backend selection (sqlite | postgres)"]
+        FACTORY["store-factory.ts<br/>backend selection (sqlite | postgres)"]
         STORE["store.ts<br/>SQLite + FTS5"]
-        PGSTORE["pgStore.ts<br/>PostgreSQL + pgvector"]
-        INGEST["ingest.ts<br/>scan + indexing"]
+        PGSTORE["pg-store.ts<br/>PostgreSQL + pgvector"]
+        INGEST["ingest.ts<br/>producer (scan → enqueue)"]
         SEARCH["search.ts<br/>hybrid search"]
+        QUEUE["job-queue-factory.ts<br/>queue backend selection"]
+        SQLQ["sqlite-job-queue.ts"]
+        PGQ["pg-job-queue.ts"]
+        WORKER["worker.ts<br/>consumer loop"]
     end
 
     subgraph PIPELINE["pipeline — text processing"]
         EXTRACT["extract.ts"]
         CHUNK["chunk.ts"]
-        CONTEXT["contextualChunking.ts<br/>opt-in LLM context"]
+        CONTEXT["contextual-chunking.ts<br/>opt-in LLM context"]
         EMBED["embed.ts"]
     end
 
@@ -37,15 +41,22 @@ graph TD
     INDEX --> FACTORY
     FACTORY --> STORE
     FACTORY --> PGSTORE
+    INDEX --> QUEUE
+    QUEUE --> SQLQ
+    QUEUE --> PGQ
     INDEX --> INGEST
     INDEX --> MCP
     INDEX --> REST
+    INDEX --> WORKER
+    WORKER --> INGEST
+    WORKER --> QUEUE
     MCP --> INGEST
     MCP --> SEARCH
     REST --> INGEST
     REST --> SEARCH
     INGEST --> STORE
     INGEST --> PGSTORE
+    INGEST --> QUEUE
     INGEST --> EXTRACT
     INGEST --> CHUNK
     INGEST --> CONTEXT
@@ -55,7 +66,7 @@ graph TD
     SEARCH --> PGSTORE
 ```
 
-`types.ts` is the shared kernel: the `Store`, `ChunkRecord`, `KbInfo`, `DocInfo` interfaces, etc., are imported by every layer. `testing/helpers.ts` groups test utilities (stub store, mock embeddings, HTTP server).
+`types.ts` is the shared kernel: the `Store`, `JobQueue`, `ChunkRecord`, `KbInfo`, `DocInfo` interfaces, etc., are imported by every layer. `test/helpers.ts` groups test utilities (stub store, stub queue, mock embeddings, HTTP server).
 
 ## Indexing flow
 
@@ -64,132 +75,97 @@ graph LR
     F["/kbs — 1 folder = 1 KB<br/>KB_ROOT"] -->|periodic scan| GLOB["fast-glob **/*<br/>ignores .git, node_modules…"]
     GLOB --> STAT["stat + SHA-256 diff"]
     STAT -->|unchanged| SKIP["skip"]
-    STAT -->|null embeddings| RE["re-index<br/>self-heal"]
-    STAT -->|binary/empty| EXCL["excluded++<br/>logged"]
-    STAT -->|modified| REMOD["delete chunks<br/>-> re-index"]
-    STAT -->|new| EXTR["extract.ts"]
-    RE --> EXTR
-    REMOD --> EXTR
-    EXTR --> CH["chunk.ts<br/>max 3200, overlap 400, headings"]
-    CH --> CC["contextualChunking.ts<br/>opt-in: LLM context per chunk"]
-    CC --> EMB["embed.ts<br/>batch 16 / OpenAI-compatible"]
-    EMB --> DB[("SQLite<br/>kbs · files · chunks · fts_chunks")]
+    STAT -->|null embeddings| RE["re-enqueue<br/>self-heal"]
+    STAT -->|binary/ext check| EXCL["excluded++"]
+    STAT -->|modified/new| ENQ["enqueue index job<br/>(kb, relPath, sha256)"]
+    ENQ --> QUEUE["jobs table<br/>(sqlite / pg)"]
+    QUEUE -->|claim N| WORKER["worker<br/>CONCURRENCY"]
+    WORKER -->|extract| EXTR["extract.ts"]
+    WORKER -->|chunk| CHUNK["chunk.ts"]
+    WORKER -->|optional LLM context| CC["contextual-chunking.ts"]
+    WORKER -->|embed| EMB["embed.ts"]
+    WORKER -->|insert| STORE2["store: file + chunks"]
+    WORKER -->|complete| QUEUE
+    WORKER -->|fail → retry| QUEUE
+    WORKER -->|park after RETRY_MAX| QUEUE2["status=failed<br/>manual retry via /admin/jobs/:id/retry"]
 ```
 
-- The `KB_ROOT` folder is scanned at startup, then periodically (`SCAN_INTERVAL`, HTTP mode only).
-- Top-level subfolders are KBs, named after the folder.
-- Each file is hashed (SHA-256): only new or modified files are re-encoded.
-- Deleted files and orphaned KBs are purged from the index (`cleanupStale`).
-- **Contextual chunking** (opt-in): when `CONTEXTUAL_CHUNKING_ENABLED` is true, the chunk stage asks a lightweight LLM for a short context sentence and prepends it to the chunk before embedding. Only the embedding input is enriched — stored content is unchanged. See [configuration → contextual chunking](./configuration#contextual-chunking).
+The producer (`ingest.ts:scanAll`) only handles the **cheap** part: filesystem scan, hash, unchanged detection. The **expensive** part (extraction, chunking, embedding, DB writes) runs in the worker.
 
 ### Skip / modify / add decision
 
-`scanKb` compares each file against what is stored in the database:
+For each file the producer checks:
 
-| Case            | Condition                       | Action                                   |
-| --------------- | ------------------------------- | ---------------------------------------- |
-| unchanged       | same `mtime` + same size        | `skipped++`                              |
-| same content    | same SHA-256 (mtime changed)    | update `mtime` only, `skipped++`         |
-| modified        | different SHA-256               | purge chunks, re-index, `modified++`     |
-| new             | absent from database            | purge any stale file, index, `added++`   |
-| binary/empty    | no extractable text             | `excluded++`, logged (`warn`)            |
-| null embeddings | chunks with `embedding IS NULL` | re-index even if unchanged, `modified++` |
+1. **mtime + bytes unchanged** → skip (no job enqueued)
+2. **SHA-256 unchanged** → update mtime only, skip
+3. **Null embeddings exist** → delete old chunks, re-enqueue index job
+4. **Binary or empty file** (extension check + head sniff) → excluded, not enqueued
+5. **Modified or new** → delete old chunks (if any), enqueue index job
 
 ## SQLite schema
 
-Four tables, two relationships via the `ON DELETE CASCADE` constraint, virtual FTS5 index.
-
 ```sql
-kbs        (id PK, name UNIQUE)
-files      (id PK, kb_id FK→kbs ON DELETE CASCADE, rel_path, sha256,
-            mtime, bytes, UNIQUE(kb_id, rel_path))
-chunks     (id PK, file_id FK→files ON DELETE CASCADE, chunk_index,
-            content, metadata JSON, embedding BLOB, UNIQUE(file_id, chunk_index))
-fts_chunks (VIRTUAL fts5: content, metadata UNINDEXED, tokenize='porter unicode61')
+CREATE TABLE kbs    (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+CREATE TABLE files  (id INTEGER PRIMARY KEY, kb_id INTEGER REFERENCES kbs, rel_path TEXT,
+                     sha256 TEXT, mtime INTEGER, bytes INTEGER,
+                     UNIQUE(kb_id, rel_path));
+CREATE TABLE chunks (id INTEGER PRIMARY KEY, file_id INTEGER REFERENCES files,
+                     chunk_index INTEGER, content TEXT, metadata TEXT, embedding BLOB,
+                     UNIQUE(file_id, chunk_index));
+CREATE VIRTUAL TABLE fts_chunks USING fts5(content, metadata UNINDEXED, tokenize='porter unicode61');
+
+-- Jobs table (created by the queue, same DB file in sqlite mode)
+CREATE TABLE jobs   (id INTEGER PRIMARY KEY, kb TEXT, rel_path TEXT, op TEXT, sha256 TEXT,
+                     mtime INTEGER, bytes INTEGER, status TEXT, attempts INTEGER, last_error TEXT,
+                     started_at INTEGER, created_at INTEGER,
+                     UNIQUE(kb, rel_path, op));
 ```
 
-**Important FTS5 trick**: `insertChunk` writes `fts_chunks (rowid, content, metadata)` with `rowid == chunks.id`. This coupling aligns the virtual rows on those of `chunks`, which makes purge and deletion (delete, purgeKB, cleanup) idempotent — no more FTS5 orphans. Deletion goes through `DELETE FROM fts_chunks WHERE rowid = ?` before each chunk deletion.
+The `jobs` table lives in the same database file (for SQLite) or the same PostgreSQL database (for the pg backend). Each queue backend creates it with `CREATE TABLE IF NOT EXISTS` on first connect.
 
 ## Pluggable backends
 
-`storeFactory.ts` selects the backend according to `STORE_BACKEND`. The rest of the
-code only sees the `Store` interface:
+Both the **store** and the **queue** follow the same pattern: an abstract interface, a concrete implementation per backend, and a factory that reads `STORE_BACKEND`:
 
 ```text
-ingest.ts / search.ts / transport/        ↓
-    Store interface (18 async methods)
-        ↓
-    storeFactory.ts → STORE_BACKEND=sqlite   → store.ts    (better-sqlite3 + FTS5)
-                    → STORE_BACKEND=postgres → pgStore.ts  (pg + pgvector)
+store-factory.ts → STORE_BACKEND=sqlite   → store.ts    (better-sqlite3 + FTS5)
+                 → STORE_BACKEND=postgres → pg-store.ts (pg + pgvector)
+
+job-queue-factory.ts → STORE_BACKEND=sqlite   → sqlite-job-queue.ts
+                    → STORE_BACKEND=postgres → pg-job-queue.ts  (FOR UPDATE SKIP LOCKED)
 ```
+
+Future backends (Redis for the queue, another DB for the store) follow the same contract by implementing `Store` / `JobQueue`.
 
 ### PostgreSQL + pgvector
 
-- Schema identical in names/columns to SQLite. Two differences:
-  - `embedding` is a `vector(N)` column (sized via `EMBEDDINGS_DIMENSION`)
-    instead of a BLOB. Conversion happens at the boundary in `Buffer` Float32, transparent
-    for the rest of the code.
-  - FTS through a generated `tsv tsvector` column + GIN index, ranked via
-    `ts_rank()` / `to_tsquery()` instead of FTS5.
-- The migration is idempotent (`CREATE EXTENSION IF NOT EXISTS vector`,
-  `CREATE TABLE IF NOT EXISTS`) and runs on first connection.
-- Hybrid search: for Phase 2, `getAllChunks()` + JS cosine is
-  kept (same behavior as SQLite). Native pgvector vector search
-  (`<=>`, `LIMIT k`) is a possible future optimization.
-- The `searchFts(words: string[])` signature abstracts the full-text syntax:
-  each backend builds its native query (`"w1" AND "w2"` FTS5 vs
-  `to_tsquery('w1 & w2')`).
-- Tests: `src/test/e2e/pgstore.e2e.test.ts` against a real Postgres engine compiled
-  in WASM (**PGlite** + pgvector extension), instantiated in memory for the duration
-  of the tests — no server, no docker, separate from the production database.
+See [storage backends](./configuration#storage-backends) for setup.
+
+The PostgreSQL queue uses `FOR UPDATE SKIP LOCKED` for atomic job claiming, parallel-safe across multiple workers (future use).
 
 ## Hybrid search
 
-```mermaid
-graph LR
-    Q["query"] --> EMBQ["embedTexts([query])"]
-    Q --> FTS["buildFtsScores<br/>MATCH \"w1\" AND \"w2\""]
-    EMBQ --> VEC["cosine(query, chunk)<br/>threshold 0.08"]
-    FTS --> KW["rank → 1/(1+|rank|)"]
-    VEC --> SCORE[("0.65 · vec + 0.35 · kw")]
-    KW --> SCORE
-    SCORE --> TOP["topK by score<br/>content truncated to 1000"]
-```
+Each search query is executed as two parallel queries and fused with weighted scoring:
 
-- **Vector**: cosine similarity between the query embedding and each chunk, weighted 0.65, minimum threshold 0.08.
-- **Keyword**: FTS5 scores weighted 0.35. The MATCH query is built as `'"word1" AND "word2"'` over words longer than 2 characters.
-- **Fallback**: if embedding fails or FTS5 is unavailable, it falls back to a per-word `indexOf` match.
-- The KB filter is applied via `getAllChunks(kb)`; the merged score sorts and returns the `topK` results with their citations (`kb`, `relPath`, `chunkIndex`).
-- **Contextual chunking is transparent to search**: when enabled, chunk embeddings
-  are enriched at index time with a LLM-generated context sentence. The hybrid
-  search path is unchanged — it compares the query against these already-enriched
-  vectors with no additional LLM call and no runtime latency.
+- **Vector search**: cosine similarity against the query embedding — returns chunks with a similarity score.
+- **Full-text search**: keyword match via FTS5 (SQLite) or `ts_rank` (PostgreSQL) — returns chunks with a relevance score.
+
+Both scores are normalized to `[0, 1]` and fused by the hybrid search formula (weighted sum). The top-K results are returned.
 
 ## Transport models
 
-|              | stdio (default)                          | HTTP (`--http`)                                       |
-| ------------ | ---------------------------------------- | ----------------------------------------------------- |
-| Connection   | `StdioServerTransport` over stdin/stdout | `StreamableHTTPServerTransport` (streamable-http)     |
-| Scan         | initial one-shot                         | initial + periodic (`SCAN_INTERVAL`)                  |
-| MCP sessions | one, unique                              | one per client: `Map<sessionId, {server, transport}>` |
-| REST         | no                                       | yes (`/health`, `/admin/*`, `/search`)                |
-| Logs         | → stderr (stdout = JSON-RPC)             | → stdout                                              |
-
-In HTTP, each MCP client gets **its own** `McpServer` + `StreamableHTTPServerTransport` pair, identified by a `Mcp-Session-Id` (UUID). A POST `/mcp` without a session creates a dedicated transport; subsequent calls reuse this transport via the session header. This avoids the _"Server already initialized"_ error on concurrent clients. `GET /mcp` exposes the list of the 9 tools (useful for the MCP inspector).
-
-The MCP SDK receives Fastify's native Node objects `IncomingMessage`/`ServerResponse`: `transport.handleRequest(request.raw, reply.raw, request.body)`. In Fastify, `reply.hijack()` is used to take back control of the raw response before passing `reply.raw` to the SDK: `reply.hijack()` transfers the response lifecycle to the caller, and the SDK writes directly (SSE + JSON-RPC) on the raw Node response.
+- **stdio** (default): MCP server on stdin/stdout. No periodic scan, no REST. Single client.
+- **http** (`--http` / `RAG_TRANSPORT=http`): Fastify server serving REST + streamable-http MCP on `PORT`. Periodic scan loop, rate-limited session creation, idle TTL eviction.
 
 ## Configuration resolution
 
-The import order in `index.ts` is critical:
-
-1. `config.ts` parses the environment on import (Zod schema, fail-fast) and computes the `KB_ROOT` / `DB_PATH` defaults according to the transport (cwd-relative in stdio, container paths in HTTP).
+1. `config.ts` runs `EnvSchema.parse(process.env)` at module load — all env vars are validated **fail-fast** before any business logic runs.
 2. `ingest.ts` reads `KB_ROOT` on module load; since `config.ts` is imported before it, the value is already pinned.
-
-In stdio mode, defaults are relative to the cwd (`./kbs`, `./rag.db`); in HTTP mode the container paths are kept (`/data/kbs`, `/data/index/rag.db`).
+3. `index.ts` creates the store, the job queue, and the worker, then starts the appropriate transport.
 
 ## Testing
 
-- **Unit** (`src/**/*.unit.test.ts`): pure and fast, mocked dependencies. The `/embeddings` endpoint is mocked via `stubEmbeddingsApi` (intercepts global `fetch` for this single path).
-- **E2E** (`src/test/e2e/**/*.e2e.test.ts`): real disk + SQLite + HTTP.
-- `KB_ROOT` trap: `ingest.ts` reads `KB_ROOT` on module load → `vitest.setup.ts` pins it to a shared tmpdir. Tests that drop files write into this `KB_ROOT` with unique KB names.
+- **Unit tests** (`*.unit.test.ts`) run in the `unit` vitest project. They use `makeStubStore()` / `makeStubQueue()` and mocks for embeddings and extraction.
+- **E2E tests** (`src/test/e2e/*.e2e.test.ts`) run in the `e2e` vitest project (thread pool, single worker, shared native SQLite addon). They create real SQLite stores, a `createSyncTestQueue` (synchronous jobs, no background worker needed), and a real HTTP server.
+- **Postgres tests** use PGlite (Postgres WASM + pgvector) — no Docker or server required.
+- **`KB_ROOT` trap**: `ingest.ts` reads `KB_ROOT` on module load → `vitest.setup.ts` pins it to a shared tmpdir. Tests that drop files write into this `KB_ROOT` with unique KB names.
