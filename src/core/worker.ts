@@ -13,6 +13,17 @@ const STALE_TIMEOUT = env.INDEXER_STALE_TIMEOUT
 
 const POLL_INTERVAL_MS = 1000
 
+const handleJobError = async (queue: JobQueue, job: IndexJob, err: unknown): Promise<void> => {
+  const msg = err instanceof Error ? err.message : String(err)
+  const remaining = job.attempts + 1 < env.INDEXER_RETRY_MAX ? env.INDEXER_RETRY_MAX - (job.attempts + 1) : 0
+  if (remaining > 0) {
+    logger.warn('job %d failed (%d retries left): %s', job.id, remaining, msg)
+  } else {
+    logger.error('job %d failed (no retries left): %s', job.id, msg)
+  }
+  await queue.fail(job.id, msg)
+}
+
 export const createWorker = (store: Store, queue: JobQueue): Worker => {
   let running = false
   let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -59,14 +70,7 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
         await queue.complete(job.id)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const remaining = job.attempts + 1 < env.INDEXER_RETRY_MAX ? env.INDEXER_RETRY_MAX - (job.attempts + 1) : 0
-      if (remaining > 0) {
-        logger.warn('job %d failed (%d retries left): %s', job.id, remaining, msg)
-      } else {
-        logger.error('job %d failed (no retries left): %s', job.id, msg)
-      }
-      await queue.fail(job.id, msg)
+      await handleJobError(queue, job, err)
     }
   }
 

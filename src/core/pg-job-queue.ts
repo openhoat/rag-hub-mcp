@@ -38,6 +38,27 @@ const rowToJob = (r: Record<string, unknown>): IndexJob => ({
   lastError: (r.last_error as string) ?? null,
 })
 
+const completeJob = (db: Db, id: number): Promise<void> => db.query('DELETE FROM jobs WHERE id = $1', [id]) as unknown as Promise<void>
+
+const failedList0 = async (db: Db, limit = 20): Promise<IndexJob[]> => {
+  const res = await db.query<Record<string, unknown>>('SELECT * FROM jobs WHERE status = $1 ORDER BY id DESC LIMIT $2', ['failed', limit])
+  return res.rows.map(rowToJob)
+}
+
+const retryJob0 = (db: Db, id: number): Promise<void> =>
+  db.query('UPDATE jobs SET status = $1, attempts = 0, last_error = NULL WHERE id = $2 AND status = $3', [
+    'pending',
+    id,
+    'failed',
+  ]) as unknown as Promise<void>
+
+const clearJobs = (db: Db): Promise<void> => db.query('DELETE FROM jobs') as unknown as Promise<void>
+
+const clearKbJobs = (db: Db, kb: string): Promise<void> => db.query('DELETE FROM jobs WHERE kb = $1', [kb]) as unknown as Promise<void>
+
+const clearFileJob = (db: Db, kb: string, relPath: string): Promise<void> =>
+  db.query('DELETE FROM jobs WHERE kb = $1 AND rel_path = $2', [kb, relPath]) as unknown as Promise<void>
+
 export const createJobQueueFromDb = (db: Db): JobQueue => {
   let migrated = false
   const ensureMigrated = async (): Promise<void> => {
@@ -86,9 +107,7 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
     return res.rows.map(rowToJob)
   }
 
-  const complete = async (id: number): Promise<void> => {
-    await db.query('DELETE FROM jobs WHERE id = $1', [id])
-  }
+  const complete = async (id: number): Promise<void> => completeJob(db, id)
 
   const fail = async (id: number, error: string): Promise<void> => {
     await db.query(
@@ -126,26 +145,15 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
     return m
   }
 
-  const failedList = async (limit = 20): Promise<IndexJob[]> => {
-    const res = await db.query<Record<string, unknown>>('SELECT * FROM jobs WHERE status = $1 ORDER BY id DESC LIMIT $2', ['failed', limit])
-    return res.rows.map(rowToJob)
-  }
+  const failedList = async (limit = 20): Promise<IndexJob[]> => failedList0(db, limit)
 
-  const retryJob = async (id: number): Promise<void> => {
-    await db.query('UPDATE jobs SET status = $1, attempts = 0, last_error = NULL WHERE id = $2 AND status = $3', ['pending', id, 'failed'])
-  }
+  const retryJob = async (id: number): Promise<void> => retryJob0(db, id)
 
-  const clear = async (): Promise<void> => {
-    await db.query('DELETE FROM jobs')
-  }
+  const clear = async (): Promise<void> => clearJobs(db)
 
-  const clearForKb = async (kb: string): Promise<void> => {
-    await db.query('DELETE FROM jobs WHERE kb = $1', [kb])
-  }
+  const clearForKb = async (kb: string): Promise<void> => clearKbJobs(db, kb)
 
-  const clearForFile = async (kb: string, relPath: string): Promise<void> => {
-    await db.query('DELETE FROM jobs WHERE kb = $1 AND rel_path = $2', [kb, relPath])
-  }
+  const clearForFile = async (kb: string, relPath: string): Promise<void> => clearFileJob(db, kb, relPath)
 
   const close = async (): Promise<void> => {}
 
