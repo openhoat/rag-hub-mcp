@@ -25,5 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - uses: google/wireit@setup-github-actions-caching/v2
+
       - name: Validate (lint + typecheck + test + build)
         run: npm run validate

@@ -38,7 +38,7 @@
     "clean:wireit": "rimraf .wireit",
     "qa": "wireit",
     "qa:biome": "wireit",
-    "qa:biome:fix": "biome check --write src/",
+    "qa:biome:fix": "biome check --write src/ scripts/ *.ts",
     "qa:fix": "npm run qa:biome:fix && npm run qa:prettier:fix && npm run qa:markdown:fix",
     "qa:markdown": "wireit",
     "qa:markdown:fix": "markdownlint-cli2 --fix",
@@ -105,6 +105,7 @@
     "build": {
       "command": "tsc",
       "files": [
+        "package.json",
         "tsconfig.json",
         "src/**/*.ts"
       ],
@@ -118,32 +119,30 @@
       "files": [
         "docs/**/*.md",
         "docs/.vitepress/config.mts",
-        "docs/public/**"
+        "docs/public/**",
+        "package.json"
       ],
       "output": [
         "dist/docs/**"
       ]
     },
-    "clean": {
-      "command": "rimraf dist",
-      "output": []
-    },
     "qa": {
       "dependencies": [
         "qa:biome",
         "qa:markdown",
-        "qa:prettier"
+        "qa:prettier",
+        "test:coverage",
+        "typecheck"
       ]
     },
     "qa:biome": {
-      "command": "biome check src/",
-      "dependencies": [
-        "typecheck",
-        "test"
-      ],
+      "command": "biome check src/ scripts/ *.ts",
       "files": [
         "biome.json",
-        "src/**/*.ts"
+        ".gitignore",
+        "src/**/*.ts",
+        "scripts/**/*.{js,mjs,ts}",
+        "*.ts"
       ],
       "output": []
     },
@@ -151,6 +150,7 @@
       "command": "markdownlint-cli2",
       "files": [
         "**/*.md",
+        ".markdownlint-cli2.jsonc",
         "!node_modules/**",
         "!dist/**",
         "!coverage/**",
@@ -180,18 +180,20 @@
     "test": {
       "command": "vitest run",
       "files": [
-        "src/**/*.ts",
+        "package.json",
         "vitest.config.ts",
-        "vitest.setup.ts"
+        "vitest.setup.ts",
+        "src/**/*.ts"
       ],
       "output": []
     },
     "test:coverage": {
       "command": "vitest run --coverage",
       "files": [
-        "src/**/*.ts",
+        "package.json",
         "vitest.config.ts",
-        "vitest.setup.ts"
+        "vitest.setup.ts",
+        "src/**/*.ts"
       ],
       "output": [
         "dist/coverage/**"
@@ -200,24 +202,27 @@
     "test:e2e": {
       "command": "vitest run --project e2e",
       "files": [
-        "src/**/*.ts",
+        "package.json",
         "vitest.config.ts",
-        "vitest.setup.ts"
+        "vitest.setup.ts",
+        "src/**/*.ts"
       ],
       "output": []
     },
     "test:unit": {
       "command": "vitest run --project unit",
       "files": [
-        "src/**/*.ts",
+        "package.json",
         "vitest.config.ts",
-        "vitest.setup.ts"
+        "vitest.setup.ts",
+        "src/**/*.ts"
       ],
       "output": []
     },
     "typecheck": {
       "command": "tsc -p tsconfig.json --noEmit",
       "files": [
+        "package.json",
         "tsconfig.json",
         "src/**/*.ts"
       ],
@@ -226,8 +231,7 @@
     "validate": {
       "dependencies": [
         "build",
-        "qa",
-        "test:coverage"
+        "qa"
       ]
     }
   }

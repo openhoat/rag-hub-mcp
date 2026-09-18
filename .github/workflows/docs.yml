@@ -28,6 +28,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - uses: google/wireit@setup-github-actions-caching/v2
       - run: npm run build:docs
       - uses: actions/upload-pages-artifact@v5
         with:

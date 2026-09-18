@@ -154,7 +154,7 @@ The full docs live at **[openhoat.github.io/rag-hub-mcp](https://openhoat.github
 ```bash
 npm install
 npm run build           # compile to dist/
-npm run validate        # lint + typecheck + test + build
+npm run validate        # qa (lint + typecheck + test:coverage) + build
 npm run clean           # remove build artifacts (dist/)
 npm start               # start the server (stdio, from dist/)
 npm run start:dev       # start the server directly from TS (no build)

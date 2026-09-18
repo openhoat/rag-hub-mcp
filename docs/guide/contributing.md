@@ -6,7 +6,7 @@ Contributions are welcome. This project is small and opinionated — if you plan
 
 ```bash
 npm install
-npm run qa          # lint + typecheck + test
+npm run qa          # lint + typecheck + test (coverage)
 npm run validate    # qa + build
 npm start           # start the server
 ```

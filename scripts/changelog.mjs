@@ -1,7 +1,7 @@
-import { ConventionalChangelog } from 'conventional-changelog'
-import { readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { Writable } from 'node:stream'
+import { ConventionalChangelog } from 'conventional-changelog'
 
 const TYPE_SECTIONS = {
   feat: 'Features',
@@ -22,7 +22,7 @@ const COMMIT_HASH_LENGTH = 7
 let newContent = ''
 
 const writable = new Writable({
-  write(chunk, encoding, callback) {
+  write(chunk, _encoding, callback) {
     newContent += chunk.toString()
     callback()
   },
@@ -57,9 +57,7 @@ generator
         return {
           ...commit,
           ...(section ? { type: section } : {}),
-          ...(typeof commit.hash === 'string'
-            ? { shortHash: commit.hash.substring(0, COMMIT_HASH_LENGTH) }
-            : {}),
+          ...(typeof commit.hash === 'string' ? { shortHash: commit.hash.substring(0, COMMIT_HASH_LENGTH) } : {}),
         }
       },
     },

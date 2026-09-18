@@ -11,8 +11,8 @@ const dbCleanup = (): void => {
   if (dbPath) {
     try {
       rmSync(dbPath, { force: true })
-      rmSync(dbPath + '-wal', { force: true })
-      rmSync(dbPath + '-shm', { force: true })
+      rmSync(`${dbPath}-wal`, { force: true })
+      rmSync(`${dbPath}-shm`, { force: true })
     } catch {
       /* ignore */
     }
