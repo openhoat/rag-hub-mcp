@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { Store } from '../../types'
+import type { Store } from '../../shared/types'
 import { stubLlmApi, unitEmbeddings, writeKbDocument } from '../helpers'
 
 /**
@@ -26,9 +26,9 @@ describe('contextual chunking end-to-end', () => {
   }
 
   const importModules = async () => {
-    const { scanAll } = await import('../../core/ingest')
-    const { search } = await import('../../core/search')
-    const { createSqliteStore } = await import('../../core/store')
+    const { scanAll } = await import('../../indexing/ingest')
+    const { search } = await import('../../search/search')
+    const { createSqliteStore } = await import('../../storage/sqlite/store')
     return { scanAll, search, createSqliteStore }
   }
 

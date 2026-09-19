@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { createSqliteJobQueue } from './sqlite-job-queue.js'
+import { createSqliteJobQueue } from './job-queue.js'
 
 let dbPath: string
 let queue: ReturnType<typeof createSqliteJobQueue>

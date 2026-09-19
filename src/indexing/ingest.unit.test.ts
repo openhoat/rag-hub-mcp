@@ -2,17 +2,17 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { JobQueue, Store } from '../types.js'
-import { createSqliteStore } from './store.js'
+import type { JobQueue, Store } from '../shared/types.js'
+import { createSqliteStore } from '../storage/sqlite/store.js'
 
-vi.mock('../pipeline/embed.js', () => ({
+vi.mock('../embeddings/embed.js', () => ({
   embedTexts: vi.fn(async () => [new Float32Array([0.5, 0.5])]),
   cosineSimilarity: vi.fn(() => 0),
 }))
-vi.mock('../pipeline/contextual-chunking.js', () => ({
+vi.mock('./pipeline/contextual-chunking.js', () => ({
   enrichChunkContent: vi.fn(async (content: string) => content),
 }))
-vi.mock('../pipeline/extract.js', () => ({
+vi.mock('./pipeline/extract.js', () => ({
   extractText: vi.fn(async () => ({
     text: 'extracted content',
     frontmatter: null,
@@ -22,10 +22,10 @@ vi.mock('../pipeline/extract.js', () => ({
   TEXT_EXTENSIONS: new Set(['.md']),
 }))
 
-import { enrichChunkContent } from '../pipeline/contextual-chunking.js'
-import { embedTexts } from '../pipeline/embed.js'
-import { extractText, isBinaryContent } from '../pipeline/extract.js'
+import { embedTexts } from '../embeddings/embed.js'
 import { addDocument, deleteDocument, deleteKb, forceReindex, indexFile, readDocument, scanAll } from './ingest.js'
+import { enrichChunkContent } from './pipeline/contextual-chunking.js'
+import { extractText, isBinaryContent } from './pipeline/extract.js'
 
 let root: string
 let store: Store

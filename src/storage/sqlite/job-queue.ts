@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
-import { env } from '../config.js'
-import type { IndexJob, JobQueue, JobStats, NewJob } from '../types.js'
+import { env } from '../../shared/config.js'
+import type { IndexJob, JobQueue, JobStats, NewJob } from '../../shared/types.js'
 
 const RETRY_MAX = env.INDEXER_RETRY_MAX
 

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ httpEnabled: false, apiKey: 'key' }))
 
-vi.mock('./config.js', () => ({
+vi.mock('./shared/config.js', () => ({
   env: {
     PORT: 8000,
     SCAN_INTERVAL: 0,
@@ -23,19 +23,16 @@ vi.mock('./config.js', () => ({
   requireHttpApiKey: vi.fn((_isHttp: boolean, apiKey: string) => apiKey.trim() !== ''),
 }))
 
-vi.mock('./core/store-factory.js', () => ({
+vi.mock('./storage/factory.js', () => ({
   createStore: vi.fn(),
-}))
-
-vi.mock('./core/job-queue-factory.js', () => ({
   createJobQueue: vi.fn(),
 }))
 
-vi.mock('./core/worker.js', () => ({
+vi.mock('./indexing/worker.js', () => ({
   createWorker: vi.fn(),
 }))
 
-vi.mock('./core/ingest.js', () => ({
+vi.mock('./indexing/ingest.js', () => ({
   scanAll: vi.fn(),
 }))
 
@@ -48,11 +45,10 @@ vi.mock('./transport/rest.js', () => ({
   createRestApp: vi.fn(),
 }))
 
-import { requireHttpApiKey } from './config.js'
-import { scanAll } from './core/ingest.js'
-import { createJobQueue } from './core/job-queue-factory.js'
-import { createStore } from './core/store-factory.js'
-import { createWorker } from './core/worker.js'
+import { scanAll } from './indexing/ingest.js'
+import { createWorker } from './indexing/worker.js'
+import { requireHttpApiKey } from './shared/config.js'
+import { createJobQueue, createStore } from './storage/factory.js'
 import { makeStubQueue, makeStubStore, makeStubWorker } from './test/helpers'
 import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
 import { createRestApp } from './transport/rest.js'

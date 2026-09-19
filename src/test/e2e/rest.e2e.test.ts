@@ -3,9 +3,9 @@ import type { Server as HttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createSqliteStore } from '../../core/store'
+import type { Store } from '../../shared/types'
+import { createSqliteStore } from '../../storage/sqlite/store'
 import { createRestApp } from '../../transport/rest'
-import type { Store } from '../../types'
 import { createSyncTestQueue, startHttpServer, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../helpers'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { ChunkRecord, Store } from '../shared/types.js'
 import { makeChunk, makeStubStore, stubEmbeddingsApi, unitEmbeddings } from '../test/helpers'
-import type { ChunkRecord, Store } from '../types.js'
 import { search } from './search.js'
 
 // Embeddings are served via a stubbed global fetch (OpenAI-compatible format).

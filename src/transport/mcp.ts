@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
-import { env } from '../config.js'
-import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../core/ingest.js'
-import { search } from '../core/search.js'
-import type { JobQueue, Store } from '../types.js'
+import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../indexing/ingest.js'
+import { search } from '../search/search.js'
+import { env } from '../shared/config.js'
+import type { JobQueue, Store } from '../shared/types.js'
 
 type ToolResult = {
   content: { type: 'text'; text: string }[]

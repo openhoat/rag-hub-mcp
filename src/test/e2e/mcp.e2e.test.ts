@@ -7,10 +7,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createSqliteStore } from '../../core/store'
+import type { Store } from '../../shared/types'
+import { createSqliteStore } from '../../storage/sqlite/store'
 import { createMcpServer, createStreamableHttpTransport } from '../../transport/mcp'
 import { createRestApp } from '../../transport/rest'
-import type { Store } from '../../types'
 import { createSyncTestQueue, stubEmbeddingsApi, unitEmbeddings, writeKbDocument } from '../helpers'
 
 const AUTH = { Authorization: 'Bearer test-secret-key' }

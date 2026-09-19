@@ -1,11 +1,11 @@
 import type { Server as HttpServer } from 'node:http'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../core/ingest.js'
-import { search } from '../core/search.js'
+import { addDocument, deleteDocument, deleteKb, readDocument, scanAll } from '../indexing/ingest.js'
+import { search } from '../search/search.js'
 import { makeStubQueue, makeStubStore, startHttpServer } from '../test/helpers'
 import { createRestApp } from './rest.js'
 
-vi.mock('../core/ingest.js', () => ({
+vi.mock('../indexing/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
@@ -30,7 +30,7 @@ vi.mock('../core/ingest.js', () => ({
     enqueued: 0,
   })),
 }))
-vi.mock('../core/search.js', () => ({
+vi.mock('../search/search.js', () => ({
   search: vi.fn(async () => [{ kb: 'kb', relPath: 'f.md', chunkIndex: 0, content: 'hit', score: 0.5 }]),
 }))
 

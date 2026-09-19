@@ -1,20 +1,8 @@
-import { Pool, type PoolClient, type QueryResultRow } from 'pg'
-import { env } from '../config.js'
-import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../types.js'
-
-/** Minimal async query surface consumed by PgStore, so the backing driver (a
- * `pg.Pool` in prod, an in-memory PGlite in tests) can be injected. */
-export interface DbQuery {
-  query<TResult extends Record<string, unknown> = PgRow>(sql: string, params?: unknown[]): Promise<{ rows: TResult[] }>
-}
-
-export interface Db extends DbQuery {
-  /** Execute a multi-statement SQL script (migration). pg.Pool has no exec, so
-   * it is emulated by running each statement; PGlite natively supports it. */
-  exec(sql: string): Promise<void>
-  transaction<T>(fn: (client: DbQuery) => Promise<T>): Promise<T>
-  close(): Promise<void>
-}
+import { Pool } from 'pg'
+import { env } from '../../shared/config.js'
+import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../../shared/types.js'
+import type { Db } from './db.js'
+import { buildPoolConfig, poolToDb } from './db.js'
 
 /**
  * PostgreSQL + pgvector implementation of the Store interface.
@@ -63,18 +51,6 @@ export const migrateSql = (dimension: number): string => `
   CREATE INDEX IF NOT EXISTS idx_chunks_tsv ON chunks USING GIN(tsv);
 `
 
-/** Build the pg Pool connection config from env (DATABASE_URL wins over PG_*). */
-export const buildPoolConfig = (): { connectionString: string; ssl?: boolean; connectionTimeoutMillis?: number } => {
-  if (env.DATABASE_URL) {
-    return { connectionString: env.DATABASE_URL, ssl: env.PG_SSL || undefined, connectionTimeoutMillis: 3000 }
-  }
-  return {
-    connectionString: `postgres://${env.PG_USER ?? ''}:${env.PG_PASSWORD ?? ''}@${env.PG_HOST ?? 'localhost'}:${env.PG_PORT}/${env.PG_DATABASE ?? 'raghub'}`,
-    ssl: env.PG_SSL || undefined,
-    connectionTimeoutMillis: 3000,
-  }
-}
-
 /** Convert a Float32Array to a pgvector literal `[a,b,c]`. */
 export const vectorToArray = (vec: Float32Array, dimension: number): string => {
   const floats = vec.length > dimension ? vec.slice(0, dimension) : vec
@@ -121,66 +97,6 @@ interface PgRow {
 
 /** Coerce a pg numeric value (string | number) into a JS number. */
 const toNum = (v: unknown): number => (v === undefined || v === null ? 0 : Number(v))
-
-/** Adapt a `pg.Pool` to the Db interface used by PgStore. */
-export const poolToDb = (pool: Pool): Db => ({
-  query: async <TResult extends QueryResultRow = PgRow>(sql: string, params: unknown[] = []): Promise<{ rows: TResult[] }> => {
-    return pool.query<TResult>(sql, params)
-  },
-  exec: async (sql: string): Promise<void> => {
-    for (const stmt of splitStatements(sql)) {
-      await pool.query(stmt)
-    }
-  },
-  transaction: async <T>(fn: (client: DbQuery) => Promise<T>): Promise<T> => {
-    const client = await pool.connect()
-    try {
-      await client.query('BEGIN')
-      const result = await fn(toDbQuery(client))
-      await client.query('COMMIT')
-      return result
-    } catch (err) {
-      await client.query('ROLLBACK')
-      throw err
-    } finally {
-      client.release()
-    }
-  },
-  close: async (): Promise<void> => {
-    await pool.end()
-  },
-})
-
-const toDbQuery = (client: PoolClient): DbQuery => ({
-  query: async <TResult extends QueryResultRow = PgRow>(sql: string, params: unknown[] = []): Promise<{ rows: TResult[] }> => {
-    return client.query<TResult>(sql, params)
-  },
-})
-
-const pushStatement = (statements: string[], current: string): void => {
-  const trimmed = current.trim()
-  if (trimmed) statements.push(trimmed)
-}
-
-/** Split a multi-statement script on semicolons at top level (outside of
- * string literals), so pg can run it statement-by-statement. */
-const splitStatements = (sql: string): string[] => {
-  const statements: string[] = []
-  let current = ''
-  let inQuote = false
-  for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i]
-    if (ch === "'" && sql[i - 1] !== '\\') inQuote = !inQuote
-    if (ch === ';' && !inQuote) {
-      pushStatement(statements, current)
-      current = ''
-    } else {
-      current += ch
-    }
-  }
-  pushStatement(statements, current)
-  return statements
-}
 
 export class PgStore implements Store {
   constructor(

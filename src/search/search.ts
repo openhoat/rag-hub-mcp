@@ -1,6 +1,6 @@
-import { getLogger } from '../log.js'
-import { cosineSimilarity, embedTexts } from '../pipeline/embed.js'
-import type { ChunkRecord, SearchResult, Store } from '../types.js'
+import { cosineSimilarity, embedTexts } from '../embeddings/embed.js'
+import { getLogger } from '../shared/log.js'
+import type { ChunkRecord, SearchResult, Store } from '../shared/types.js'
 
 export interface SearchParams {
   query: string

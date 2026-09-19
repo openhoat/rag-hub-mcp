@@ -3,18 +3,19 @@ import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/se
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import fastify from 'fastify'
 import { describe, expect, test, vi } from 'vitest'
-import { SessionRegistry } from './core/session-registry.js'
 import { closeSession, handleExistingSession, handleNewSession, registerMcpEndpoints } from './index.js'
+import { SessionRegistry } from './shared/session-registry.js'
+import type { Store } from './shared/types.js'
 import { makeStubQueue, makeStubStore, makeStubWorker } from './test/helpers'
-import type { Store } from './types.js'
 
 vi.mock('./transport/mcp.js', () => ({
   createMcpServer: vi.fn(),
   createStreamableHttpTransport: vi.fn(),
 }))
 
-vi.mock('./core/store-factory.js', () => ({
+vi.mock('./storage/factory.js', () => ({
   createStore: vi.fn(),
+  createJobQueue: vi.fn(),
 }))
 
 type McpSession = {

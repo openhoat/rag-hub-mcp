@@ -2,11 +2,11 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { corsOrigins, env } from '../config.js'
-import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../core/ingest.js'
-import { search } from '../core/search.js'
-import { getLogger } from '../log.js'
-import type { JobQueue, Store } from '../types.js'
+import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../indexing/ingest.js'
+import { search } from '../search/search.js'
+import { corsOrigins, env } from '../shared/config.js'
+import { getLogger } from '../shared/log.js'
+import type { JobQueue, Store } from '../shared/types.js'
 
 const log = getLogger('rest')
 

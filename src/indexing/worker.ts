@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { env } from '../config.js'
-import { getLogger } from '../log.js'
-import type { IndexJob, JobQueue, Store, Worker } from '../types.js'
+import { env } from '../shared/config.js'
+import { getLogger } from '../shared/log.js'
+import type { IndexJob, JobQueue, Store, Worker } from '../shared/types.js'
 import { indexFile } from './ingest.js'
 
 const logger = getLogger('worker')

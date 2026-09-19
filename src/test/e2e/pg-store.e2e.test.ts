@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type { Store } from '../../types'
+import type { Store } from '../../shared/types'
 import { createPgliteStore } from '../helpers'
 
 /**

@@ -5,9 +5,10 @@ import type { PGliteInterface } from '@electric-sql/pglite'
 import { PGlite } from '@electric-sql/pglite'
 import { vector as pgliteVector } from '@electric-sql/pglite-pgvector'
 import type { FastifyInstance } from 'fastify'
-import { indexFile } from '../core/ingest.js'
-import { createPgStoreFromDb, type Db } from '../core/pg-store'
-import type { ChunkRecord, JobQueue, JobStats, KbInfo, NewJob, Store, Worker } from '../types'
+import { indexFile } from '../indexing/ingest.js'
+import type { ChunkRecord, JobQueue, JobStats, KbInfo, NewJob, Store, Worker } from '../shared/types'
+import type { Db } from '../storage/postgres/db.js'
+import { createPgStoreFromDb } from '../storage/postgres/store.js'
 
 /**
  * Bridge an in-memory PGlite (real Postgres compiled to WASM + pgvector) to the

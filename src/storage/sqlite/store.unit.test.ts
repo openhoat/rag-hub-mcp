@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import type { Store } from '../types.js'
+import type { Store } from '../../shared/types.js'
 import { createSqliteStore } from './store.js'
 
 const makeStore = (): { store: Store; dir: string } => {

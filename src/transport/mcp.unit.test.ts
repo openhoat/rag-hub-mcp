@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest'
+import type { Store } from '../shared/types.js'
 import { makeStubQueue, makeStubStore } from '../test/helpers'
-import type { Store } from '../types.js'
 import { handleToolCall } from './mcp.js'
 
-vi.mock('../core/search.js', () => ({
+vi.mock('../search/search.js', () => ({
   search: vi.fn(async () => [
     {
       kb: 'kb',
@@ -15,9 +15,9 @@ vi.mock('../core/search.js', () => ({
   ]),
 }))
 
-import { addDocument, deleteDocument, deleteKb } from '../core/ingest.js'
+import { addDocument, deleteDocument, deleteKb } from '../indexing/ingest.js'
 
-vi.mock('../core/ingest.js', () => ({
+vi.mock('../indexing/ingest.js', () => ({
   addDocument: vi.fn(async () => {}),
   deleteDocument: vi.fn(async () => {}),
   deleteKb: vi.fn(async () => {}),
@@ -87,7 +87,7 @@ describe('handleToolCall', () => {
   })
 
   test('should split comma-separated kb into an array for search', async () => {
-    const { search } = await import('../core/search.js')
+    const { search } = await import('../search/search.js')
     const mockedSearch = vi.mocked(search)
     mockedSearch.mockResolvedValueOnce([{ kb: 'kb', relPath: 'f.md', chunkIndex: 0, content: 'hit', score: 0.5 }])
     await handleToolCall(store(), q, 'rag_search', {
@@ -138,7 +138,7 @@ describe('handleToolCall', () => {
   })
 
   test('should include frontmatter in rag_read output when present', async () => {
-    const { readDocument } = await import('../core/ingest.js')
+    const { readDocument } = await import('../indexing/ingest.js')
     vi.mocked(readDocument).mockResolvedValueOnce({
       content: 'body text',
       frontmatter: { title: 'Doc', author: 'Olivier' },
@@ -155,7 +155,7 @@ describe('handleToolCall', () => {
   })
 
   test('should report not found when the document is missing', async () => {
-    const { readDocument } = await import('../core/ingest.js')
+    const { readDocument } = await import('../indexing/ingest.js')
     const mockedRead = vi.mocked(readDocument)
     mockedRead.mockResolvedValueOnce(null)
     const result = await handleToolCall(store(), q, 'rag_read', {

@@ -1,4 +1,4 @@
-import { env } from '../config.js'
+import { env } from '../../shared/config.js'
 
 interface Chunk {
   content: string

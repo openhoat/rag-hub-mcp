@@ -1,5 +1,5 @@
-import { env } from '../config.js'
-import { getLogger } from '../log.js'
+import { env } from '../../shared/config.js'
+import { getLogger } from '../../shared/log.js'
 
 const logger = getLogger('contextual-chunking')
 

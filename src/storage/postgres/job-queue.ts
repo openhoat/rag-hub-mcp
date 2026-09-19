@@ -1,8 +1,8 @@
 import { Pool } from 'pg'
-import { env } from '../config.js'
-import type { IndexJob, JobQueue, JobStats, NewJob } from '../types.js'
-import type { Db } from './pg-store.js'
-import { buildPoolConfig } from './pg-store.js'
+import { env } from '../../shared/config.js'
+import type { IndexJob, JobQueue, JobStats, NewJob } from '../../shared/types.js'
+import type { Db } from './db.js'
+import { buildPoolConfig } from './db.js'
 
 const RETRY_MAX = env.INDEXER_RETRY_MAX
 

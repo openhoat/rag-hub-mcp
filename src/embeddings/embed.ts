@@ -1,4 +1,4 @@
-import { env } from '../config.js'
+import { env } from '../shared/config.js'
 
 export interface EmbedConfig {
   baseUrl: string

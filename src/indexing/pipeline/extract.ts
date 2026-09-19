@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
-import { extraTextExtensions } from '../config.js'
-import { getLogger } from '../log.js'
-import type { ExtractResult } from '../types.js'
+import { extraTextExtensions } from '../../shared/config.js'
+import { getLogger } from '../../shared/log.js'
+import type { ExtractResult } from '../../shared/types.js'
 
 const logger = getLogger('extract')
 

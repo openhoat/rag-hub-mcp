@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 
 // Mock config so we can drive env values (env is parsed once at module load).
 // Seed with the same defaults the real zod schema would produce.
-vi.mock('../config.js', () => ({
+vi.mock('../../shared/config.js', () => ({
   env: {
     DATABASE_URL: undefined,
     PG_HOST: undefined,
@@ -15,8 +15,9 @@ vi.mock('../config.js', () => ({
   },
 }))
 
-import { env } from '../config.js'
-import { buildPoolConfig, migrateSql, vectorToArray, vectorToArrayFromText } from './pg-store.js'
+import { env } from '../../shared/config.js'
+import { buildPoolConfig } from './db.js'
+import { migrateSql, vectorToArray, vectorToArrayFromText } from './store.js'
 
 afterEach(() => {
   vi.resetModules()

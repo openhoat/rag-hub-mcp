@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../types.js'
+import type { ChunkRecord, DocInfo, FileRecord, FtsRow, KbInfo, KnownFileRow, Store } from '../../shared/types.js'
 
 /** A raw SQLite chunks row (snake_case columns returned by better-sqlite3). */
 interface RawChunkRow {
