@@ -4,13 +4,12 @@
 
 ## Layer view
 
-Source code (`src/`) is organized into four layers, with dependencies pointing downward:
+Source code (`src/`) is organized into domains with strict dependency rules enforced by **dependency-cruiser** (`qa:arch` gate):
 
 ```mermaid
 graph TD
     subgraph BOOT["bootstrap"]
         INDEX["index.ts<br/>transport selection, init, queue + worker"]
-        LOG["log.ts"]
     end
 
     subgraph TRANSPORT["transport — protocols"]
@@ -18,55 +17,57 @@ graph TD
         REST["rest.ts<br/>Fastify /health /admin /search"]
     end
 
-    subgraph CORE["core — business logic"]
-        FACTORY["store-factory.ts<br/>backend selection (sqlite | postgres)"]
-        STORE["store.ts<br/>SQLite + FTS5"]
-        PGSTORE["pg-store.ts<br/>PostgreSQL + pgvector"]
+    subgraph SEARCH["search — read side"]
+        SH["search.ts<br/>hybrid FTS + vector search"]
+    end
+
+    subgraph INDEXING["indexing — write side"]
         INGEST["ingest.ts<br/>producer (scan → enqueue)"]
-        SEARCH["search.ts<br/>hybrid search"]
-        QUEUE["job-queue-factory.ts<br/>queue backend selection"]
-        SQLQ["sqlite-job-queue.ts"]
-        PGQ["pg-job-queue.ts"]
         WORKER["worker.ts<br/>consumer loop"]
+        EXTRACT["pipeline/extract.ts"]
+        CHUNK["pipeline/chunk.ts"]
+        CC["pipeline/contextual-chunking.ts"]
     end
 
-    subgraph PIPELINE["pipeline — text processing"]
-        EXTRACT["extract.ts"]
-        CHUNK["chunk.ts"]
-        CONTEXT["contextual-chunking.ts<br/>opt-in LLM context"]
-        EMBED["embed.ts"]
+    subgraph STORAGE["storage — persistence"]
+        SF["factory.ts<br/>backend selection"]
+        SS["sqlite/store.ts + job-queue.ts"]
+        PS["postgres/store.ts + job-queue.ts<br/>+ db.ts (Db interface)"]
     end
 
+    subgraph EMBEDDINGS["embeddings"]
+        EMB["embed.ts<br/>client + cosineSimilarity"]
+    end
+
+    subgraph SHARED["shared"]
+        CFG["config.ts<br/>env zod schema"]
+        LOG["log.ts"]
+        TYPES["types.ts<br/>Store, JobQueue…"]
+        PATH["path.ts"]
+        SR["session-registry.ts"]
+    end
+
+    INDEX --> CFG
     INDEX --> LOG
-    INDEX --> FACTORY
-    FACTORY --> STORE
-    FACTORY --> PGSTORE
-    INDEX --> QUEUE
-    QUEUE --> SQLQ
-    QUEUE --> PGQ
+    INDEX --> TYPES
+    INDEX --> SF
     INDEX --> INGEST
+    INDEX --> WORKER
     INDEX --> MCP
     INDEX --> REST
-    INDEX --> WORKER
     WORKER --> INGEST
-    WORKER --> QUEUE
     MCP --> INGEST
-    MCP --> SEARCH
+    MCP --> SH
     REST --> INGEST
-    REST --> SEARCH
-    INGEST --> STORE
-    INGEST --> PGSTORE
-    INGEST --> QUEUE
+    REST --> SH
+    INGEST --> EMB
     INGEST --> EXTRACT
     INGEST --> CHUNK
-    INGEST --> CONTEXT
-    INGEST --> EMBED
-    SEARCH --> EMBED
-    SEARCH --> STORE
-    SEARCH --> PGSTORE
+    INGEST --> CC
+    SH --> EMB
 ```
 
-`types.ts` is the shared kernel: the `Store`, `JobQueue`, `ChunkRecord`, `KbInfo`, `DocInfo` interfaces, etc., are imported by every layer. `test/helpers.ts` groups test utilities (stub store, stub queue, mock embeddings, HTTP server).
+`shared/types.ts` is the contract kernel: `Store`, `JobQueue`, `ChunkRecord`, … — imported by every other domain. `test/helpers.ts` groups test utilities (stubs, mock embeddings, HTTP server).
 
 ## Indexing flow
 
@@ -128,14 +129,15 @@ The `jobs` table lives in the same database file (for SQLite) or the same Postgr
 Both the **store** and the **queue** follow the same pattern: an abstract interface, a concrete implementation per backend, and a factory that reads `STORE_BACKEND`:
 
 ```text
-store-factory.ts → STORE_BACKEND=sqlite   → store.ts    (better-sqlite3 + FTS5)
-                 → STORE_BACKEND=postgres → pg-store.ts (pg + pgvector)
+storage/factory.ts → STORE_BACKEND=sqlite   → storage/sqlite/store.ts     (better-sqlite3 + FTS5)
+                   → STORE_BACKEND=postgres → storage/postgres/store.ts   (pg + pgvector)
+                                              storage/postgres/db.ts       (Db interface, poolToDb)
 
-job-queue-factory.ts → STORE_BACKEND=sqlite   → sqlite-job-queue.ts
-                    → STORE_BACKEND=postgres → pg-job-queue.ts  (FOR UPDATE SKIP LOCKED)
+                   → STORE_BACKEND=sqlite   → storage/sqlite/job-queue.ts
+                   → STORE_BACKEND=postgres → storage/postgres/job-queue.ts (FOR UPDATE SKIP LOCKED)
 ```
 
-Future backends (Redis for the queue, another DB for the store) follow the same contract by implementing `Store` / `JobQueue`.
+The `Db` interface in `storage/postgres/db.ts` abstracts the driver (`pg.Pool` in production, in-memory PGlite in tests) so PostgreSQL connectors can be unit-tested without a real server.
 
 ### PostgreSQL + pgvector
 

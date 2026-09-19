@@ -119,7 +119,7 @@ the column is sized once at migration time.
 
 > Tests : the PostgreSQL backend is exercised without any server via **PGlite**,
 > a real Postgres engine compiled to WASM with the pgvector extension bundled,
-> instantiated in-memory for the duration of the suite (see `src/test/e2e/pgstore.e2e.test.ts`).
+> instantiated in-memory for the duration of the suite (see `src/test/e2e/pg-store.e2e.test.ts`).
 
 ## Transport modes
 
