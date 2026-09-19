@@ -146,129 +146,143 @@ export const createStreamableHttpTransport = (options?: StreamableHttpTransportO
   })
 }
 
-export const handleToolCall = async (store: Store, queue: JobQueue, name: string, args: Record<string, unknown>): Promise<ToolResult> => {
-  switch (name) {
-    case 'rag_list_kbs': {
-      const kbs = await store.listKbs()
-      const lines = kbs.map(k => `- **${k.name}**: ${k.docCount} documents, ${k.chunkCount} chunks, ${fmt(k.totalBytes)}`)
-      return {
-        content: [{ type: 'text', text: lines.join('\n') || 'No knowledge bases.' }],
-      }
-    }
-
-    case 'rag_list_documents': {
-      const { kb } = z.object(kbArgs).parse(args)
-      const docs = await store.listFiles(kb)
-      const lines = docs.map(d => `- **${d.relPath}** (${d.chunkCount} chunks, ${fmt(d.bytes)})`)
-      return {
-        content: [{ type: 'text', text: lines.join('\n') || 'No documents.' }],
-      }
-    }
-
-    case 'rag_search': {
-      const { query, kb, top_k } = z.object(searchArgs).parse(args)
-      const topK = top_k ?? 10
-      const results = await search(store, { query, kb: normalizeKb(kb), topK })
-      if (results.length === 0) {
-        return { content: [{ type: 'text', text: 'No results found.' }] }
-      }
-      const lines = results.map(
-        (r, i) =>
-          `[${i + 1}] KB: **${r.kb}** — ${r.relPath}#chunk${r.chunkIndex} (score: ${r.score})
-${r.content}`,
-      )
-      return { content: [{ type: 'text', text: lines.join('\n\n---\n\n') }] }
-    }
-
-    case 'rag_add_document': {
-      const { kb, path, content } = z.object(addDocArgs).parse(args)
-      await addDocument(store, queue, kb, path, content)
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Document added: **${kb}/${path}** — queued for indexing.`,
-          },
-        ],
-      }
-    }
-
-    case 'rag_delete_document': {
-      const { kb, path } = z.object(deleteDocArgs).parse(args)
-      await deleteDocument(store, queue, kb, path)
-      return {
-        content: [{ type: 'text', text: `Document deleted: **${kb}/${path}**` }],
-      }
-    }
-
-    case 'rag_read': {
-      const { kb, path } = z.object(readArgs).parse(args)
-      const doc = await readDocument(kb, path)
-      if (doc === null) {
-        return {
-          content: [{ type: 'text', text: `Document not found: **${kb}/${path}**` }],
-          isError: true,
-        }
-      }
-      const text = formatDoc(doc.content, doc.frontmatter)
-      return { content: [{ type: 'text', text }] }
-    }
-
-    case 'rag_delete_kb': {
-      const { kb } = z.object(kbArgs).parse(args)
-      await deleteKb(store, queue, kb)
-      return {
-        content: [{ type: 'text', text: `Knowledge base deleted: **${kb}**` }],
-      }
-    }
-
-    case 'rag_reindex': {
-      const { force } = z.object(reindexArgs).parse(args)
-      const result = force ? await forceReindex(store, queue) : await scanAll(store, queue)
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Reindex queued: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped} x${result.excluded}`,
-          },
-        ],
-      }
-    }
-
-    case 'rag_status': {
-      const kbs = await store.listKbs()
-      const total = kbs.reduce((s, k) => s + k.chunkCount, 0)
-      const totalDocs = kbs.reduce((s, k) => s + k.docCount, 0)
-      const queueStats = await queue.stats()
-      const lines = [
-        `**${kbs.length}** knowledge bases, **${totalDocs}** documents, **${total}** chunks`,
-        '',
-        ...kbs.map(k => `- **${k.name}**: ${k.docCount} docs, ${k.chunkCount} chunks, ${fmt(k.totalBytes)}`),
-        '',
-        `Indexer queue: ${queueStats.pending} pending, ${queueStats.processing} processing, ${queueStats.failed} failed`,
-      ]
-      return { content: [{ type: 'text', text: lines.join('\n') }] }
-    }
-
-    case 'rag_jobs': {
-      const stats = await queue.stats()
-      const failed = await queue.failedList()
-      const lines = [`Queue: ${stats.pending} pending, ${stats.processing} processing, ${stats.failed} failed`]
-      if (failed.length > 0) {
-        lines.push('', '**Failed jobs:**')
-        for (const j of failed) {
-          lines.push(`- **${j.kb}/${j.relPath}**: ${j.lastError ?? 'unknown'} (${j.attempts} attempts)`)
-        }
-      }
-      return { content: [{ type: 'text', text: lines.join('\n') }] }
-    }
-
-    default:
-      return {
-        content: [{ type: 'text', text: `Unknown tool: ${name}` }],
-        isError: true,
-      }
+const listKbsHandler = async (store: Store, _queue: JobQueue, _args: Record<string, unknown>): Promise<ToolResult> => {
+  const kbs = await store.listKbs()
+  const lines = kbs.map(k => `- **${k.name}**: ${k.docCount} documents, ${k.chunkCount} chunks, ${fmt(k.totalBytes)}`)
+  return {
+    content: [{ type: 'text', text: lines.join('\n') || 'No knowledge bases.' }],
   }
+}
+
+const listDocumentsHandler = async (store: Store, _queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { kb } = z.object(kbArgs).parse(args)
+  const docs = await store.listFiles(kb)
+  const lines = docs.map(d => `- **${d.relPath}** (${d.chunkCount} chunks, ${fmt(d.bytes)})`)
+  return {
+    content: [{ type: 'text', text: lines.join('\n') || 'No documents.' }],
+  }
+}
+
+const searchHandler = async (store: Store, _queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { query, kb, top_k } = z.object(searchArgs).parse(args)
+  const topK = top_k ?? 10
+  const results = await search(store, { query, kb: normalizeKb(kb), topK })
+  if (results.length === 0) {
+    return { content: [{ type: 'text', text: 'No results found.' }] }
+  }
+  const lines = results.map(
+    (r, i) =>
+      `[${i + 1}] KB: **${r.kb}** — ${r.relPath}#chunk${r.chunkIndex} (score: ${r.score})
+${r.content}`,
+  )
+  return { content: [{ type: 'text', text: lines.join('\n\n---\n\n') }] }
+}
+
+const addDocumentHandler = async (store: Store, queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { kb, path, content } = z.object(addDocArgs).parse(args)
+  await addDocument(store, queue, kb, path, content)
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `Document added: **${kb}/${path}** — queued for indexing.`,
+      },
+    ],
+  }
+}
+
+const deleteDocumentHandler = async (store: Store, queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { kb, path } = z.object(deleteDocArgs).parse(args)
+  await deleteDocument(store, queue, kb, path)
+  return {
+    content: [{ type: 'text', text: `Document deleted: **${kb}/${path}**` }],
+  }
+}
+
+const readHandler = async (_store: Store, _queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { kb, path } = z.object(readArgs).parse(args)
+  const doc = await readDocument(kb, path)
+  if (doc === null) {
+    return {
+      content: [{ type: 'text', text: `Document not found: **${kb}/${path}**` }],
+      isError: true,
+    }
+  }
+  const text = formatDoc(doc.content, doc.frontmatter)
+  return { content: [{ type: 'text', text }] }
+}
+
+const deleteKbHandler = async (store: Store, queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { kb } = z.object(kbArgs).parse(args)
+  await deleteKb(store, queue, kb)
+  return {
+    content: [{ type: 'text', text: `Knowledge base deleted: **${kb}**` }],
+  }
+}
+
+const reindexHandler = async (store: Store, queue: JobQueue, args: Record<string, unknown>): Promise<ToolResult> => {
+  const { force } = z.object(reindexArgs).parse(args)
+  const result = force ? await forceReindex(store, queue) : await scanAll(store, queue)
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `Reindex queued: +${result.added} ~${result.modified} -${result.deleted} =${result.skipped} x${result.excluded}`,
+      },
+    ],
+  }
+}
+
+const statusHandler = async (store: Store, queue: JobQueue, _args: Record<string, unknown>): Promise<ToolResult> => {
+  const kbs = await store.listKbs()
+  const total = kbs.reduce((s, k) => s + k.chunkCount, 0)
+  const totalDocs = kbs.reduce((s, k) => s + k.docCount, 0)
+  const queueStats = await queue.stats()
+  const lines = [
+    `**${kbs.length}** knowledge bases, **${totalDocs}** documents, **${total}** chunks`,
+    '',
+    ...kbs.map(k => `- **${k.name}**: ${k.docCount} docs, ${k.chunkCount} chunks, ${fmt(k.totalBytes)}`),
+    '',
+    `Indexer queue: ${queueStats.pending} pending, ${queueStats.processing} processing, ${queueStats.failed} failed`,
+  ]
+  return { content: [{ type: 'text', text: lines.join('\n') }] }
+}
+
+const jobsHandler = async (_store: Store, queue: JobQueue, _args: Record<string, unknown>): Promise<ToolResult> => {
+  const stats = await queue.stats()
+  const failed = await queue.failedList()
+  const lines = [`Queue: ${stats.pending} pending, ${stats.processing} processing, ${stats.failed} failed`]
+  if (failed.length > 0) {
+    lines.push('', '**Failed jobs:**')
+    for (const j of failed) {
+      lines.push(`- **${j.kb}/${j.relPath}**: ${j.lastError ?? 'unknown'} (${j.attempts} attempts)`)
+    }
+  }
+  return { content: [{ type: 'text', text: lines.join('\n') }] }
+}
+
+const toolHandlers: Record<string, (store: Store, queue: JobQueue, args: Record<string, unknown>) => Promise<ToolResult>> = {
+  rag_list_kbs: listKbsHandler,
+  rag_list_documents: listDocumentsHandler,
+  rag_search: searchHandler,
+  rag_add_document: addDocumentHandler,
+  rag_delete_document: deleteDocumentHandler,
+  rag_read: readHandler,
+  rag_delete_kb: deleteKbHandler,
+  rag_reindex: reindexHandler,
+  rag_status: statusHandler,
+  rag_jobs: jobsHandler,
+}
+
+export const handleToolCall = async (store: Store, queue: JobQueue, name: string, args: Record<string, unknown>): Promise<ToolResult> => {
+  const handler = toolHandlers[name]
+  if (!handler) {
+    return {
+      content: [{ type: 'text', text: `Unknown tool: ${name}` }],
+      isError: true,
+    }
+  }
+  return handler(store, queue, args)
 }
 
 const fmt = (bytes: number): string => {

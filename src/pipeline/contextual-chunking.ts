@@ -49,12 +49,16 @@ const SYSTEM_PROMPT =
   'You generate a compact context sentence that places a document chunk within its larger document. ' +
   'Keep it factual, under 40 words, and focused on terms that help an embedding model retrieve the chunk.'
 
+const buildDocContext = (context: ChunkContext | undefined): string => {
+  if (!context || (!context.path && !context.headings)) return ''
+  const path = `\nDocument path: ${context.path ?? ''}`
+  const headings = context.headings ? `\nSection headings: ${context.headings}` : ''
+  return path + headings
+}
+
 const generateContext = async (content: string, context: ChunkContext | undefined, config: ContextualChunkingConfig): Promise<string> => {
   const url = `${config.baseUrl}/chat/completions`
-  const docContext =
-    context && (context.path || context.headings)
-      ? `\nDocument path: ${context.path ?? ''}${context.headings ? `\nSection headings: ${context.headings}` : ''}`
-      : ''
+  const docContext = buildDocContext(context)
   const body = {
     model: config.model,
     temperature: 0,

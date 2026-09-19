@@ -104,10 +104,12 @@ export interface NewJob {
   bytes: number
 }
 
+export type JobStatus = 'pending' | 'processing' | 'failed'
+
 export interface IndexJob extends NewJob {
   id: number
   attempts: number
-  status: 'pending' | 'processing' | 'failed'
+  status: JobStatus
   lastError: string | null
 }
 

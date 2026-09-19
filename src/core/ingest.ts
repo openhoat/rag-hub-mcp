@@ -92,6 +92,101 @@ const listKbDirs = (root: string): string[] => {
     .map(d => d.name)
 }
 
+interface EntryData {
+  store: Store
+  queue: JobQueue
+  kbName: string
+  entry: string
+  fullPath: string
+  known: KnownFile | undefined
+  knownId: number | undefined
+  st: Stats
+  needsReembed: boolean
+  result: IngestResult
+}
+
+const deleteKnownFile = async (store: Store, knownId: number | undefined): Promise<void> => {
+  if (!knownId) return
+  await store.deleteChunks(knownId)
+  await store.deleteFile(knownId)
+}
+
+const enqueueEntry = async (data: EntryData, sha256: string): Promise<void> => {
+  const { store, queue, kbName, entry, st, knownId, needsReembed, result } = data
+  if (needsReembed) {
+    logger.info('re-indexing (null embeddings): %s', entry)
+    await store.deleteChunks(knownId as number)
+  } else {
+    await deleteKnownFile(store, knownId)
+  }
+  await queue.enqueue([
+    {
+      kb: kbName,
+      relPath: entry,
+      op: 'index',
+      sha256,
+      mtime: Math.floor(st.mtimeMs),
+      bytes: st.size,
+    },
+  ])
+  if (knownId || needsReembed) {
+    result.modified++
+  } else {
+    result.added++
+  }
+  result.enqueued++
+}
+
+const handleEntry = async (data: EntryData): Promise<void> => {
+  const { store, entry, fullPath, known, knownId, st, needsReembed, result } = data
+  if (isUnchanged(known, st) && !needsReembed) {
+    result.skipped++
+    return
+  }
+
+  const sha256 = hashFile(fullPath)
+
+  if (isSameHash(known, sha256) && !needsReembed) {
+    await store.updateFileMtime(knownId as number, Math.floor(st.mtimeMs))
+    result.skipped++
+    return
+  }
+
+  if (!canIndexFile(fullPath)) {
+    logger.warn('skipped (no extractable text): %s', entry)
+    await deleteKnownFile(store, knownId)
+    result.excluded++
+    return
+  }
+
+  await enqueueEntry(data, sha256)
+}
+
+const processEntry = async (
+  store: Store,
+  queue: JobQueue,
+  kbName: string,
+  entry: string,
+  kbRoot: string,
+  knownFiles: Map<string, KnownFile>,
+  result: IngestResult,
+): Promise<void> => {
+  const fullPath = join(kbRoot, entry)
+  const st = safeStat(fullPath)
+  if (!st?.isFile()) return
+
+  const knownKey = `${kbName}/${entry}`
+  const known = knownFiles.get(knownKey)
+  const knownId = known?.id
+  const needsReembed = knownId ? await store.hasNullEmbeddings(knownId) : false
+
+  const data: EntryData = { store, queue, kbName, entry, fullPath, known, knownId, st, needsReembed, result }
+
+  await handleEntry(data)
+
+  knownFiles.delete(knownKey)
+}
+
 const scanKb = async (
   store: Store,
   queue: JobQueue,
@@ -109,72 +204,7 @@ const scanKb = async (
   })
 
   for (const entry of entries) {
-    const fullPath = join(kbRoot, entry)
-    const st = safeStat(fullPath)
-    if (!st?.isFile()) continue
-
-    const knownKey = `${kbName}/${entry}`
-    const known = knownFiles.get(knownKey)
-    const knownId = known?.id
-
-    const needsReembed = knownId ? await store.hasNullEmbeddings(knownId) : false
-
-    if (isUnchanged(known, st) && !needsReembed) {
-      result.skipped++
-      knownFiles.delete(knownKey)
-      continue
-    }
-
-    const sha256 = hashFile(fullPath)
-
-    if (isSameHash(known, sha256) && !needsReembed) {
-      await store.updateFileMtime(knownId as number, Math.floor(st.mtimeMs))
-      knownFiles.delete(knownKey)
-      result.skipped++
-      continue
-    }
-
-    // Pre-check: skip binary files
-    if (!canIndexFile(fullPath)) {
-      result.excluded++
-      logger.warn('skipped (no extractable text): %s', entry)
-      // Delete old data if any (stale file or needsReembed)
-      if (knownId) {
-        await store.deleteChunks(knownId)
-        await store.deleteFile(knownId)
-      }
-      knownFiles.delete(knownKey)
-      continue
-    }
-
-    if (needsReembed) {
-      logger.info('re-indexing (null embeddings): %s', entry)
-      await store.deleteChunks(knownId as number)
-    } else if (knownId) {
-      await store.deleteChunks(knownId)
-      await store.deleteFile(knownId)
-    }
-
-    // Enqueue the index job (the producer side is done — worker will extract/chunk/embed/insert)
-    await queue.enqueue([
-      {
-        kb: kbName,
-        relPath: entry,
-        op: 'index',
-        sha256,
-        mtime: Math.floor(st.mtimeMs),
-        bytes: st.size,
-      },
-    ])
-
-    if (knownId || needsReembed) {
-      result.modified++
-    } else {
-      result.added++
-    }
-    result.enqueued++
-
-    knownFiles.delete(knownKey)
+    await processEntry(store, queue, kbName, entry, kbRoot, knownFiles, result)
   }
 }
 
