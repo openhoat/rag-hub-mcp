@@ -37,7 +37,6 @@ jobs:
             ghcr.io/openhoat/rag-hub-mcp
             registry.op3n.cloud/rag-hub-mcp
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
