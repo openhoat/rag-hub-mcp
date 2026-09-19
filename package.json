@@ -18,15 +18,14 @@
   "homepage": "https://openhoat.github.io/rag-hub-mcp/",
   "type": "module",
   "bin": {
-    "rag-hub-mcp": "dist/index.js"
+    "rag-hub-mcp": "dist/build/index.js"
   },
   "files": [
-    "dist/",
+    "dist/build/",
     "!dist/**/*.test.js",
     "!dist/**/*.test.d.ts",
     "!dist/**/*.e2e.test.js",
     "!dist/**/*.e2e.test.d.ts",
-    "!dist/coverage/",
     "README.md",
     "LICENSE"
   ],
@@ -46,7 +45,7 @@
     "qa:prettier": "wireit",
     "qa:prettier:fix": "prettier --write \"**/*.md\"",
     "sonar": "wireit",
-    "start": "node dist/index.js",
+    "start": "node dist/build/index.js",
     "start:dev": "NODE_ENV=development tsx src/index.ts",
     "start:docs": "vitepress dev docs",
     "start:inspector": "npx @modelcontextprotocol/inspector npm run start:dev",
@@ -57,7 +56,7 @@
     "typecheck": "wireit",
     "validate": "wireit"
   },
-  "main": "dist/index.js",
+  "main": "dist/build/index.js",
   "volta": {
     "node": "24.21.0",
     "npm": "11.19.1"
@@ -112,8 +111,7 @@
         "src/**/*.ts"
       ],
       "output": [
-        "dist/**/*.js",
-        "dist/**/*.d.ts"
+        "dist/build/**"
       ]
     },
     "build:docs": {
@@ -125,7 +123,8 @@
         "package.json"
       ],
       "output": [
-        "dist/docs/**"
+        "dist/docs/**",
+        "dist/.vitepress-cache/**"
       ]
     },
     "qa": {

@@ -153,10 +153,10 @@ The full docs live at **[openhoat.github.io/rag-hub-mcp](https://openhoat.github
 
 ```bash
 npm install
-npm run build           # compile to dist/
+npm run build           # compile to dist/build/
 npm run validate        # qa (lint + typecheck + test:coverage) + build
-npm run clean           # remove build artifacts (dist/)
-npm start               # start the server (stdio, from dist/)
+npm run clean           # remove build artifacts (dist/build/)
+npm start               # start the server (stdio, from dist/build/)
 npm run start:dev       # start the server directly from TS (no build)
 npm start -- --http     # start in HTTP mode (REST + streamable-http MCP)
 npm run start:inspector # open the MCP Inspector web UI (launches via tsx, no build)
