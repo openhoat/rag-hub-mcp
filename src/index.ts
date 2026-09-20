@@ -7,7 +7,7 @@ import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/se
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { scanAll } from './indexing/ingest.js'
 import { createWorker } from './indexing/worker.js'
-import { env, isHttpMode } from './shared/config.js'
+import { env, isHttpMode, requireHttpApiKey } from './shared/config.js'
 import { getLogger } from './shared/log.js'
 import { SessionRegistry } from './shared/session-registry.js'
 import type { JobQueue, Store } from './shared/types.js'
@@ -81,9 +81,15 @@ export const handleNewSession = async (
 export const main = async (): Promise<void> => {
   const PORT = env.PORT
   const SCAN_INTERVAL = env.SCAN_INTERVAL
+  const MCP_API_KEY = env.MCP_API_KEY
   const MCP_SESSION_TTL_SECONDS = env.MCP_SESSION_TTL_SECONDS
   const MCP_SESSION_MAX = env.MCP_SESSION_MAX
   const MCP_SESSION_CREATE_RATE_PER_MINUTE = env.MCP_SESSION_CREATE_RATE_PER_MINUTE
+
+  if (!requireHttpApiKey(isHttpMode, MCP_API_KEY)) {
+    logger.error('HTTP mode requires MCP_API_KEY to be set')
+    process.exit(1)
+  }
 
   logger.info(`rag-hub-mcp v${env.VERSION} starting (${isHttpMode ? 'http' : 'stdio'})...`)
 
