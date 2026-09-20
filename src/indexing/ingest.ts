@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, type Stats, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, extname, join, relative } from 'node:path'
 import fastGlob from 'fast-glob'
 import { embedTexts } from '../embeddings/embed.js'
 import { env } from '../shared/config.js'
@@ -9,7 +9,7 @@ import { sanitizeRelativePath } from '../shared/path.js'
 import type { IngestResult, JobQueue, Store } from '../shared/types.js'
 import { chunkText } from './pipeline/chunk.js'
 import { enrichChunkContent } from './pipeline/contextual-chunking.js'
-import { extractText, isBinaryContent, isTextFile } from './pipeline/extract.js'
+import { BINARY_EXTRACTABLE_EXTENSIONS, extractText, isBinaryContent, isTextFile } from './pipeline/extract.js'
 
 const logger = getLogger('ingest')
 
@@ -27,7 +27,7 @@ const SCAN_IGNORE = ['.git/**', 'node_modules/**', '__pycache__/**', '.DS_Store'
 /** Peek at the head of a file to detect binary content — cheap, no full extract. */
 const canIndexFile = (fullPath: string): boolean => {
   if (isTextFile(fullPath)) return true
-  // Unknown extension: sniff the head
+  if (BINARY_EXTRACTABLE_EXTENSIONS.has(extname(fullPath).toLowerCase())) return true
   try {
     const buf = readFileSync(fullPath)
     return !isBinaryContent(buf)

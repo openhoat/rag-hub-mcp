@@ -20,6 +20,7 @@ vi.mock('./pipeline/extract.js', () => ({
   isTextFile: vi.fn((path: string) => path.endsWith('.md')),
   isBinaryContent: vi.fn(() => false),
   TEXT_EXTENSIONS: new Set(['.md']),
+  BINARY_EXTRACTABLE_EXTENSIONS: new Set(['.pdf', '.docx', '.xlsx', '.pptx']),
 }))
 
 import { embedTexts } from '../embeddings/embed.js'
@@ -216,6 +217,22 @@ describe('scanAll', () => {
     expect(result.added).toBe(0)
     expect(result.enqueued).toBe(0)
     expect(queue.enqueued).toHaveLength(0)
+  })
+
+  test('should enqueue pdf/docx/xlsx/pptx despite being binary', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    writeFileSync(join(root, 'docs', 'a.pdf'), '%PDF-1.4\n\x00\x01\x02', 'utf-8')
+    writeFileSync(join(root, 'docs', 'b.docx'), 'PK\x00\x01\x02', 'utf-8')
+    writeFileSync(join(root, 'docs', 'c.xlsx'), 'PK\x00\x01\x02', 'utf-8')
+    writeFileSync(join(root, 'docs', 'd.pptx'), 'PK\x00\x01\x02', 'utf-8')
+    const result = await scanAll(store, queue, root)
+    expect(result.excluded).toBe(0)
+    expect(result.added).toBe(4)
+    expect(result.enqueued).toBe(4)
+    expect(queue.enqueued).toHaveLength(4)
   })
 
   test('should handle a missing root gracefully', async () => {

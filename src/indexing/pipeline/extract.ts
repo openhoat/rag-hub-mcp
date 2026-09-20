@@ -104,6 +104,10 @@ export const TEXT_EXTENSIONS = new Set([
   '.csv',
 ])
 
+/** Extensions with a dedicated binary extractor (e.g., PDF, DOCX, XLSX, PPTX).
+ *  These are not text files but can be indexed via their respective extractors. */
+export const BINARY_EXTRACTABLE_EXTENSIONS = new Set(['.pdf', '.docx', '.xlsx', '.pptx'])
+
 // Merge the built-in list with any extensions configured via TEXT_EXTENSIONS.
 for (const ext of extraTextExtensions) {
   TEXT_EXTENSIONS.add(ext)

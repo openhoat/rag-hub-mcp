@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { extractText, isTextFile, parseFrontmatter } from './extract.js'
+import { BINARY_EXTRACTABLE_EXTENSIONS, extractText, isTextFile, parseFrontmatter } from './extract.js'
 
 const makeDir = (): string => {
   return mkdtempSync(join(tmpdir(), 'rag-extract-'))
@@ -205,5 +205,20 @@ describe('isTextFile', () => {
     expect(isTextFile('a.pdf')).toBe(false)
     expect(isTextFile('a.docx')).toBe(false)
     expect(isTextFile('a.bin')).toBe(false)
+  })
+})
+
+describe('BINARY_EXTRACTABLE_EXTENSIONS', () => {
+  test('should include PDF, DOCX, XLSX, PPTX', () => {
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.pdf')).toBe(true)
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.docx')).toBe(true)
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.xlsx')).toBe(true)
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.pptx')).toBe(true)
+  })
+
+  test('should not include text extensions', () => {
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.md')).toBe(false)
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.txt')).toBe(false)
+    expect(BINARY_EXTRACTABLE_EXTENSIONS.has('.json')).toBe(false)
   })
 })
