@@ -16,14 +16,18 @@ const parseChangelog = async () => {
   for (const line of content.split('\n')) {
     const match = line.match(TAG_PATTERN)
     if (match) {
-      if (currentVersion) sections.set(currentVersion, currentLines.join('\n').trim())
+      if (currentVersion && !sections.has(currentVersion)) {
+        sections.set(currentVersion, currentLines.join('\n').trim())
+      }
       currentVersion = match[1]
       currentLines = []
     } else if (currentVersion !== null) {
       currentLines.push(line)
     }
   }
-  if (currentVersion) sections.set(currentVersion, currentLines.join('\n').trim())
+  if (currentVersion && !sections.has(currentVersion)) {
+    sections.set(currentVersion, currentLines.join('\n').trim())
+  }
   return sections
 }
 
