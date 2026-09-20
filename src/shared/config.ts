@@ -76,9 +76,3 @@ export const extraTextExtensions: ReadonlySet<string> = new Set(
     })
     .filter(ext => ext.length > 1),
 )
-
-// Transport-mode guard, kept pure so it can be unit-tested without triggering
-// the top-level server bootstrap in index.ts.
-export const requireHttpApiKey = (isHttp: boolean, apiKey: string): boolean => {
-  return !isHttp || apiKey.trim() !== ''
-}

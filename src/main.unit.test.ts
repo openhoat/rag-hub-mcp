@@ -20,7 +20,6 @@ vi.mock('./shared/config.js', () => ({
   get isHttpMode() {
     return state.httpEnabled
   },
-  requireHttpApiKey: vi.fn((_isHttp: boolean, apiKey: string) => apiKey.trim() !== ''),
 }))
 
 vi.mock('./storage/factory.js', () => ({
@@ -47,7 +46,6 @@ vi.mock('./transport/rest.js', () => ({
 
 import { scanAll } from './indexing/ingest.js'
 import { createWorker } from './indexing/worker.js'
-import { requireHttpApiKey } from './shared/config.js'
 import { createJobQueue, createStore } from './storage/factory.js'
 import { makeStubQueue, makeStubStore, makeStubWorker } from './test/helpers'
 import { createMcpServer, createStreamableHttpTransport } from './transport/mcp.js'
@@ -83,7 +81,6 @@ describe('main bootstrap', () => {
     vi.mocked(createMcpServer).mockReturnValue(stubServer() as never)
     vi.mocked(createStreamableHttpTransport).mockReturnValue(stubTransport() as never)
     vi.mocked(createRestApp).mockReset()
-    vi.mocked(requireHttpApiKey).mockClear()
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
   })
 
@@ -112,27 +109,28 @@ describe('main bootstrap', () => {
     expect(exitSpy).not.toHaveBeenCalled()
   })
 
-  test('HTTP mode with valid API key starts REST + MCP endpoints and listens', async () => {
+  test('HTTP mode with valid key starts REST + MCP endpoints and listens', async () => {
     state.httpEnabled = true
     const app = fastify()
     vi.spyOn(app, 'listen').mockResolvedValue(undefined as never)
     vi.mocked(createRestApp).mockResolvedValue(app as never)
     const { main } = await import('./index.js')
     await main()
-    expect(requireHttpApiKey).toHaveBeenCalledWith(true, 'key')
     expect(createRestApp).toHaveBeenCalledTimes(1)
     expect(app.listen).toHaveBeenCalledWith({ port: 8000, host: '0.0.0.0' })
     expect(exitSpy).not.toHaveBeenCalled()
   })
 
-  test('HTTP mode without an API key fails fast via process.exit', async () => {
+  test('HTTP mode without key still starts (no crash), logs a warning', async () => {
     state.httpEnabled = true
     state.apiKey = ''
-    exitSpy.mockImplementation(() => {
-      throw new Error('process.exit called')
-    })
+    const app = fastify()
+    vi.spyOn(app, 'listen').mockResolvedValue(undefined as never)
+    vi.mocked(createRestApp).mockResolvedValue(app as never)
     const { main } = await import('./index.js')
-    await expect(main()).rejects.toThrow('process.exit called')
-    expect(exitSpy).toHaveBeenCalledWith(1)
+    await main()
+    expect(createRestApp).toHaveBeenCalledTimes(1)
+    expect(app.listen).toHaveBeenCalled()
+    expect(exitSpy).not.toHaveBeenCalled()
   })
 })

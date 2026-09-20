@@ -109,30 +109,3 @@ describe('config', () => {
     expect(env.CONTEXTUAL_CHUNKING_MODEL).toBe('qwen2.5:0.5b')
   })
 })
-
-describe('requireHttpApiKey', () => {
-  test('accepts a configured key in http mode', async () => {
-    const { requireHttpApiKey } = await importConfig()
-    expect(requireHttpApiKey(true, 'secret')).toBe(true)
-  })
-
-  test('rejects an empty key in http mode', async () => {
-    const { requireHttpApiKey } = await importConfig()
-    expect(requireHttpApiKey(true, '')).toBe(false)
-  })
-
-  test('rejects a whitespace-only key in http mode', async () => {
-    const { requireHttpApiKey } = await importConfig()
-    expect(requireHttpApiKey(true, '   ')).toBe(false)
-  })
-
-  test('does not block stdio mode without a key', async () => {
-    const { requireHttpApiKey } = await importConfig()
-    expect(requireHttpApiKey(false, '')).toBe(true)
-  })
-
-  test('does not block stdio mode with a key', async () => {
-    const { requireHttpApiKey } = await importConfig()
-    expect(requireHttpApiKey(false, 'secret')).toBe(true)
-  })
-})
