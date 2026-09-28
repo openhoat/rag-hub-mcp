@@ -6,7 +6,7 @@ Drop documents into folders → each folder becomes a named knowledge base → s
 
 [![CI](https://github.com/openhoat/rag-hub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/openhoat/rag-hub-mcp/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![npm version](https://img.shields.io/npm/v/rag-hub-mcp)](https://www.npmjs.com/package/rag-hub-mcp)
+[![npm version](https://img.shields.io/npm/v/@headwood/rag-hub-mcp)](https://www.npmjs.com/package/@headwood/rag-hub-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org)
 [![GitHub stars](https://img.shields.io/github/stars/openhoat/rag-hub-mcp)](https://github.com/openhoat/rag-hub-mcp)
 [![last commit](https://img.shields.io/github/last-commit/openhoat/rag-hub-mcp)](https://github.com/openhoat/rag-hub-mcp)
@@ -52,10 +52,10 @@ No install needed — run it directly with `npx`:
 
 ```bash
 # stdio mode (default): serve MCP tools for a local agent
-npx rag-hub-mcp
+npx @headwood/rag-hub-mcp
 
 # HTTP mode: REST API + MCP (streamable-http) on a port
-npx rag-hub-mcp --http
+npx @headwood/rag-hub-mcp --http
 ```
 
 Requires **Node 22+**. `better-sqlite3` compiles natively on first use (prebuilt binaries are used when available).
@@ -65,7 +65,7 @@ Requires **Node 22+**. `better-sqlite3` compiles natively on first use (prebuilt
 ```bash
 mkdir -p ./kbs/my-knowledge-base
 echo "Hello RAG" > ./kbs/my-knowledge-base/hello.md
-npx rag-hub-mcp
+npx @headwood/rag-hub-mcp
 ```
 
 Any MCP-compatible agent can launch the server itself via `npx` — no server to keep running:
@@ -75,7 +75,7 @@ Any MCP-compatible agent can launch the server itself via `npx` — no server to
   "mcpServers": {
     "rag-hub-mcp": {
       "command": "npx",
-      "args": ["rag-hub-mcp"],
+      "args": ["@headwood/rag-hub-mcp"],
       "env": {
         "EMBEDDINGS_BASE_URL": "http://localhost:11434/v1",
         "EMBEDDINGS_MODEL": "bge-m3",
@@ -95,7 +95,7 @@ For a shared server over the network or a Docker deployment, see [getting starte
 
 ```bash
 MCP_API_KEY=my-secret-key EMBEDDINGS_BASE_URL=http://localhost:11434/v1 \
-  KB_ROOT=./kbs npx rag-hub-mcp --http
+  KB_ROOT=./kbs npx @headwood/rag-hub-mcp --http
 
 docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
   -e EMBEDDINGS_BASE_URL=http://host.docker.internal:11434/v1 ghcr.io/openhoat/rag-hub-mcp:latest

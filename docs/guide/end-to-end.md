@@ -11,7 +11,7 @@ Add the MCP server to Claude Code's config (`~/.claude.json` or project `.mcp.js
   "mcpServers": {
     "rag-hub-mcp": {
       "command": "npx",
-      "args": ["rag-hub-mcp"],
+      "args": ["@headwood/rag-hub-mcp"],
       "env": {
         "EMBEDDINGS_BASE_URL": "http://localhost:11434/v1",
         "KB_ROOT": "./kbs",

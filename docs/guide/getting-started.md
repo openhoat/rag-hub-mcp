@@ -9,7 +9,7 @@ Requires **Node 22+**. `better-sqlite3` compiles natively on first use (prebuilt
 Run it directly with `npx` — no install, no server to keep running:
 
 ```bash
-npx rag-hub-mcp
+npx @headwood/rag-hub-mcp
 ```
 
 stdio mode serves the MCP tools on stdin/stdout for a local agent. Point it at a folder of documents:
@@ -17,13 +17,13 @@ stdio mode serves the MCP tools on stdin/stdout for a local agent. Point it at a
 ```bash
 mkdir -p ./kbs/my-knowledge-base
 echo "Hello RAG" > ./kbs/my-knowledge-base/hello.md
-npx rag-hub-mcp
+npx @headwood/rag-hub-mcp
 ```
 
 Or install globally once:
 
 ```bash
-npm install -g rag-hub-mcp
+npm install -g @headwood/rag-hub-mcp
 rag-hub-mcp          # stdio
 rag-hub-mcp --http   # server
 ```
@@ -39,7 +39,7 @@ echo "Hello RAG" > ./kbs/my-knowledge-base/hello.md
 MCP_API_KEY=my-secret-key \
 EMBEDDINGS_BASE_URL=http://localhost:11434/v1 \
 KB_ROOT=./kbs \
-npx rag-hub-mcp --http
+npx @headwood/rag-hub-mcp --http
 ```
 
 Verify:

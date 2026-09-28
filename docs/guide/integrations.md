@@ -9,7 +9,7 @@ Use `npx` to launch the server on demand. No server to keep running; set `KB_ROO
   "mcpServers": {
     "rag-hub-mcp": {
       "command": "npx",
-      "args": ["rag-hub-mcp"],
+      "args": ["@headwood/rag-hub-mcp"],
       "env": {
         "EMBEDDINGS_BASE_URL": "http://localhost:11434/v1",
         "EMBEDDINGS_MODEL": "bge-m3",
@@ -23,7 +23,7 @@ Use `npx` to launch the server on demand. No server to keep running; set `KB_ROO
 
 ## opencode / Claude Code / Cline — remote (HTTP)
 
-Against a server running `rag-hub-mcp --http`:
+Against a server running `@headwood/rag-hub-mcp --http`:
 
 ```json
 {
