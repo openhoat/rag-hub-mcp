@@ -49,7 +49,7 @@
 
 ### #18 [QA] Couverture faible du code critique
 
-- [ ] `worker.ts` (~5 %), `postgres/job-queue.ts` (~0 %), `db.ts` (~19 %) : poll/claim/retry/reclaimStale
+- [ ] `worker.ts` (~70 % : reste `stop`/`drain`/branches d'erreur, `worker.unit.test.ts` ajouté), `postgres/job-queue.ts` (~0 %), `db.ts` (~19 %) : poll/claim/retry/reclaimStale
 
 ### #19 [TECH] Dettes mineures
 
