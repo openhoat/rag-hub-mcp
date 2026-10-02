@@ -8,7 +8,7 @@ vi.mock('./postgres/job-queue.js', () => ({ createPgJobQueue: vi.fn() }))
 vi.mock('./sqlite/store.js', () => ({ createSqliteStore: vi.fn() }))
 vi.mock('./sqlite/job-queue.js', () => ({ createSqliteJobQueue: vi.fn() }))
 
-const { createStore } = await import('./factory.js')
+const { createStore, createJobQueue } = await import('./factory.js')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -33,5 +33,27 @@ describe('storeFactory', () => {
     expect(store).toEqual({ name: 'pg-store' })
     const sqlite = await import('./sqlite/store.js')
     expect(sqlite.createSqliteStore).not.toHaveBeenCalled()
+  })
+})
+
+describe('jobQueueFactory', () => {
+  test('should select sqlite by default', async () => {
+    envMock.STORE_BACKEND = 'sqlite'
+    await createJobQueue()
+    const sqlite = await import('./sqlite/job-queue.js')
+    expect(sqlite.createSqliteJobQueue).toHaveBeenCalledWith('./rag.db')
+    const pg = await import('./postgres/job-queue.js')
+    expect(pg.createPgJobQueue).not.toHaveBeenCalled()
+  })
+
+  test('should select postgres when configured', async () => {
+    envMock.STORE_BACKEND = 'postgres'
+    const pg = await import('./postgres/job-queue.js')
+    vi.mocked(pg.createPgJobQueue).mockResolvedValue({ name: 'pg-queue' } as never)
+    const queue = await createJobQueue()
+    expect(pg.createPgJobQueue).toHaveBeenCalledTimes(1)
+    expect(queue).toEqual({ name: 'pg-queue' })
+    const sqlite = await import('./sqlite/job-queue.js')
+    expect(sqlite.createSqliteJobQueue).not.toHaveBeenCalled()
   })
 })
