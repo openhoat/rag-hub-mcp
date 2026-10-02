@@ -23,10 +23,6 @@
 
 - [ ] refuser/skipper au-delà d'un seuil configurable avant `readFileSync`/`hashFile`
 
-### #16 [BUG] Rate-limit de création de session appliqué à tout `/mcp`
-
-- [ ] distinguer la création (sans `Mcp-Session-Id`) du trafic des sessions existantes
-
 ### #18 [QA] Couverture faible du code critique
 
 - [ ] `worker.ts` (~70 % : reste `stop`/`drain`/branches d'erreur, `worker.unit.test.ts` ajouté), `postgres/job-queue.ts` (~0 %), `db.ts` (~19 %) : poll/claim/retry/reclaimStale
