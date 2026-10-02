@@ -14,29 +14,29 @@
 
 - [ ] Implementation
 
-### #13 [PERF] Recherche O(N) en mémoire — pgvector inutilisé
+### #13 [PERF] In-memory O(N) search — pgvector unused
 
-- [ ] pousser le cosinus en SQL (`<=>` + index) côté Postgres
-- [ ] réfléchir à un index ANN côté SQLite (ou borne + rerank)
+- [ ] push cosine distance into SQL (`<=>` + index) on the Postgres side
+- [ ] consider an ANN index for SQLite (or a bound + rerank)
 
-### #14 [PERF] Ingestion sans borne de taille de fichier
+### #14 [PERF] Ingestion with no file size bound
 
-- [ ] refuser/skipper au-delà d'un seuil configurable avant `readFileSync`/`hashFile`
+- [ ] reject/skip beyond a configurable threshold before `readFileSync`/`hashFile`
 
-### #18 [QA] Couverture faible du code critique
+### #18 [QA] Low coverage of critical code
 
-- [ ] `worker.ts` (~70 % : reste `stop`/`drain`/branches d'erreur, `worker.unit.test.ts` ajouté), `postgres/job-queue.ts` (~0 %), `db.ts` (~19 %) : poll/claim/retry/reclaimStale
+- [ ] `worker.ts` (~70%: `stop`/`drain`/error branches left, `worker.unit.test.ts` added), `postgres/job-queue.ts` (~0%), `db.ts` (~19%): poll/claim/retry/reclaimStale
 
-### #19 [TECH] Dettes mineures
+### #19 [TECH] Minor tech debt
 
-- [ ] image Docker : `npm prune --omit=dev` (devDeps embarqués aujourd'hui)
-- [ ] `chunk.ts` : metadata construit deux fois, `headings` = dernier paragraphe du chunk
-- [ ] race scan/worker sur job `processing` (lost-update auto-réparé mais incohérent)
+- [ ] Docker image: `npm prune --omit=dev` (devDeps currently bundled)
+- [ ] `chunk.ts`: metadata built twice, `headings` = last paragraph of the chunk
+- [ ] scan/worker race on `processing` jobs (lost update self-heals but is inconsistent)
 
-### #20 [TECH] `createPgJobQueue` réimplémente `poolToDb` (adapter `Db` divergent)
+### #20 [TECH] `createPgJobQueue` reimplements `poolToDb` (divergent `Db` adapter)
 
-- [ ] construire la queue via `poolToDb(new Pool(buildPoolConfig()))` au lieu de l'objet `Db` inline
-- [ ] corriger `exec` (`splitStatements`) pour que `migrateSql` (2 statements) passe
-- [ ] tester `job-queue` via `pgliteToDb` (même seam que le store)
+- [ ] build the queue via `poolToDb(new Pool(buildPoolConfig()))` instead of the inline `Db` object
+- [ ] fix `exec` (`splitStatements`) so `migrateSql` (2 statements) passes
+- [ ] test `job-queue` via `pgliteToDb` (same seam as the store)
 
 ## In Progress
