@@ -197,6 +197,57 @@ describe('index bootstrap helpers', () => {
     expect(notFound.statusCode).toBe(404)
   })
 
+  test('registerMcpEndpoints rate-limits session creation but not existing sessions', async () => {
+    const app = fastify()
+    const store = makeStubStore() as unknown as Store
+    const queue = makeStubQueue()
+    const sessions = new SessionRegistry<McpSession>(10, 1000)
+    const mcp = await import('./transport/mcp.js')
+    const handleRequest = vi.fn((_request: unknown, response: { end: (chunk?: string) => void }) => {
+      response.end('{}')
+      return Promise.resolve()
+    })
+    vi.mocked(mcp.createStreamableHttpTransport).mockReturnValue({
+      handleRequest,
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as StreamableHTTPServerTransport)
+    vi.mocked(mcp.createMcpServer).mockReturnValue({
+      connect: vi.fn().mockResolvedValue(undefined),
+    } as unknown as McpServer)
+
+    await registerMcpEndpoints(app, sessions, store, queue, {
+      createRateLimit: 1,
+    })
+    await app.ready()
+
+    // Existing-session traffic is exempt: it must not consume the creation budget.
+    for (let i = 0; i < 3; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        headers: {
+          authorization: 'Bearer test-secret-key',
+          'mcp-session-id': 'ghost',
+        },
+      })
+      expect(res.statusCode).toBe(404)
+    }
+
+    // Creation is still throttled: the first is accepted, the next is 429.
+    const first = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { authorization: 'Bearer test-secret-key' },
+    })
+    expect(first.statusCode).not.toBe(429)
+    const second = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { authorization: 'Bearer test-secret-key' },
+    })
+    expect(second.statusCode).toBe(429)
+  })
+
   test('registerShutdown closes the store on signal', async () => {
     const close = vi.fn().mockResolvedValue(undefined)
     const store = { close } as unknown as Store

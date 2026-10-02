@@ -163,7 +163,17 @@ export const registerMcpEndpoints = async (
   app.post(
     '/mcp',
     {
-      config: { rateLimit: { max: opts.createRateLimit, timeWindow: 60_000 } },
+      config: {
+        rateLimit: {
+          max: opts.createRateLimit,
+          timeWindow: 60_000,
+          // Only new-session creation (no Mcp-Session-Id header) is throttled:
+          // traffic from an already established session must never be counted
+          // against the creation budget. @fastify/rate-limit 11 has no `skip`
+          // option, so existing sessions go through the `allowList` exemption.
+          allowList: (req: FastifyRequest) => Boolean(req.headers['mcp-session-id']),
+        },
+      },
     },
     async (request, reply) => {
       if (!requestAuthenticated(request.headers.authorization)) {
