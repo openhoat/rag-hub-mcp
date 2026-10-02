@@ -18,6 +18,18 @@ const TYPE_SECTIONS = {
 
 const COMMIT_HASH_LENGTH = 7
 
+// GitHub owner/repo names are alphanumeric with inner hyphens (no leading or
+// trailing hyphen). Rejecting anything else drops false references parsed from
+// prose like `#10-#19` (which yields repository "10-") while keeping real ones.
+const GITHUB_IDENTIFIER = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/
+
+const isValidReference = reference => {
+  if (!reference.repository && !reference.owner) return true
+  return (
+    (!reference.repository || GITHUB_IDENTIFIER.test(reference.repository)) && (!reference.owner || GITHUB_IDENTIFIER.test(reference.owner))
+  )
+}
+
 let newContent = ''
 
 // `releaseCount: 0` regenerates the WHOLE changelog from git tags, so the file
@@ -49,7 +61,11 @@ generator
       transform: commit => {
         // Always expose shortHash so the writer never renders `[undefined]`
         // links for non-conventional commits (e.g. plain "Revert ...").
-        const enriched = typeof commit.hash === 'string' ? { ...commit, shortHash: commit.hash.substring(0, COMMIT_HASH_LENGTH) } : commit
+        const enriched = {
+          ...commit,
+          ...(typeof commit.hash === 'string' ? { shortHash: commit.hash.substring(0, COMMIT_HASH_LENGTH) } : {}),
+          ...(Array.isArray(commit.references) ? { references: commit.references.filter(isValidReference) } : {}),
+        }
         if (!commit.type || typeof commit.type !== 'string') return enriched
         const section = TYPE_SECTIONS[commit.type.toLowerCase()]
         return section ? { ...enriched, type: section } : enriched
