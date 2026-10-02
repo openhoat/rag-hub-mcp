@@ -14,11 +14,6 @@
 
 - [ ] Implementation
 
-### #12 [BUG] Concurrency worker = débit d'acquisition, pas un plafond
-
-- [ ] plafonner réellement `inFlight.size < INDEXER_CONCURRENCY` dans `worker.ts`
-- [ ] sinon un embedding lent peut monter à ~4×300 appels concurrents
-
 ### #13 [PERF] Recherche O(N) en mémoire — pgvector inutilisé
 
 - [ ] pousser le cosinus en SQL (`<=>` + index) côté Postgres
