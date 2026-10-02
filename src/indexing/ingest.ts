@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, type Stats, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, extname, join, relative } from 'node:path'
+import { dirname, extname, join } from 'node:path'
 import fastGlob from 'fast-glob'
 import { embedTexts } from '../embeddings/embed.js'
 import { env } from '../shared/config.js'
 import { getLogger } from '../shared/log.js'
-import { sanitizeRelativePath } from '../shared/path.js'
+import { sanitizeKbDir, sanitizeRelativePath } from '../shared/path.js'
 import type { IngestResult, JobQueue, Store } from '../shared/types.js'
 import { chunkText } from './pipeline/chunk.js'
 import { enrichChunkContent } from './pipeline/contextual-chunking.js'
@@ -308,8 +308,6 @@ export const indexFile = async (
 }
 
 export const addDocument = async (store: Store, queue: JobQueue, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {
-  const kbDir = join(root, kb)
-  mkdirSync(kbDir, { recursive: true })
   const fullPath = sanitizeRelativePath(root, kb, relPath)
   mkdirSync(dirname(fullPath), { recursive: true })
   writeFileSync(fullPath, content, 'utf-8')
@@ -345,9 +343,7 @@ export const deleteDocument = async (store: Store, queue: JobQueue, kb: string, 
 }
 
 export const deleteKb = async (store: Store, queue: JobQueue, kb: string, root: string = KB_ROOT) => {
-  const kbDir = join(root, kb)
-  const normalized = relative(root, kbDir)
-  if (normalized === '' || normalized.startsWith('..')) throw new Error('invalid path')
+  const kbDir = sanitizeKbDir(root, kb)
   if (existsSync(kbDir)) rmSync(kbDir, { recursive: true, force: true })
 
   await queue.clearForKb(kb)

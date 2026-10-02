@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -264,6 +264,17 @@ describe('addDocument', () => {
     await expect(addDocument(store, queue, 'docs', '../outside.md', 'x', root)).rejects.toThrow('invalid path')
     await expect(addDocument(store, queue, 'docs', 'a/../../../escape.md', 'x', root)).rejects.toThrow('invalid path')
   })
+
+  test('should reject a kb escaping the KB root without creating it', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    const outside = join(root, '..', 'evil')
+    await expect(addDocument(store, queue, '../evil', 'a.md', 'x', root)).rejects.toThrow('invalid path')
+    await expect(addDocument(store, queue, '../..', 'etc/passwd', 'x', root)).rejects.toThrow('invalid path')
+    expect(existsSync(outside)).toBe(false)
+  })
 })
 
 describe('deleteDocument', () => {
@@ -285,6 +296,14 @@ describe('deleteDocument', () => {
     store = setup.store
     const queue = makeStubQueue()
     await expect(deleteDocument(store, queue, 'docs', '../../etc/passwd', root)).rejects.toThrow('invalid path')
+  })
+
+  test('should reject a kb escaping the KB root', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    await expect(deleteDocument(store, queue, '../..', 'etc/passwd', root)).rejects.toThrow('invalid path')
   })
 })
 
@@ -312,6 +331,13 @@ describe('readDocument', () => {
     store = setup.store
     await expect(readDocument('docs', '../../etc/passwd', root)).rejects.toThrow('invalid path')
   })
+
+  test('should reject a kb escaping the KB root', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    await expect(readDocument('../..', 'etc/passwd', root)).rejects.toThrow('invalid path')
+  })
 })
 
 describe('deleteKb', () => {
@@ -334,5 +360,14 @@ describe('deleteKb', () => {
     const queue = makeStubQueue()
     await deleteKb(store, queue, 'missing', root)
     expect(await store.listKbs()).toHaveLength(0)
+  })
+
+  test('should reject a kb escaping the KB root', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    await expect(deleteKb(store, queue, '../..', root)).rejects.toThrow('invalid path')
+    await expect(deleteKb(store, queue, '', root)).rejects.toThrow('invalid path')
   })
 })
