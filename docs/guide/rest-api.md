@@ -12,6 +12,7 @@ All endpoints except `/health` require a Bearer token (`MCP_API_KEY`). `rag-hub-
 | `/admin/kbs/:kb/documents`          | POST   | Bearer | Add document (`json: {path, content}`) — queued          |
 | `/admin/kbs/:kb/documents/*`        | DELETE | Bearer | Delete document                                          |
 | `/admin/kbs/:kb`                    | DELETE | Bearer | Delete KB                                                |
+| `/document?kb=...&path=...`         | GET    | Bearer | Read a document's full extracted content                 |
 | `/admin/reindex`                    | POST   | Bearer | Rescan for changes (`?force=true` rebuilds from scratch) |
 | `/admin/status`                     | GET    | Bearer | Index status + queue stats                               |
 | `/admin/jobs`                       | GET    | Bearer | Queue stats + failed jobs list                           |

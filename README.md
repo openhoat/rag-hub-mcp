@@ -87,7 +87,7 @@ Any MCP-compatible agent can launch the server itself via `npx` — no server to
 }
 ```
 
-The 8 `rag_*` tools are then available in your agent sessions.
+The 10 `rag_*` tools are then available in your agent sessions.
 
 ### HTTP server / Docker
 
@@ -120,15 +120,19 @@ docker run -p 8000:8000 -e MCP_API_KEY=my-secret-key \
 
 **Small REST API** (`--http` mode), all endpoints except `/health` require `MCP_API_KEY`:
 
-| Endpoint                        | Method              | Purpose                       |
-| ------------------------------- | ------------------- | ----------------------------- |
-| `/health`                       | GET                 | Health check                  |
-| `/admin/kbs`                    | GET                 | List KBs                      |
-| `/admin/kbs/:kb/documents`      | GET / POST / DELETE | List / add / delete documents |
-| `/admin/kbs/:kb`                | DELETE              | Delete a KB                   |
-| `/admin/reindex`                | POST                | Force reindex                 |
-| `/admin/status`                 | GET                 | Index status                  |
-| `/search?query=…&kb=…&top_k=10` | GET                 | Hybrid search                 |
+| Endpoint                        | Method     | Purpose                   |
+| ------------------------------- | ---------- | ------------------------- |
+| `/health`                       | GET        | Health check              |
+| `/admin/kbs`                    | GET        | List KBs                  |
+| `/admin/kbs/:kb/documents`      | GET / POST | List / add documents      |
+| `/admin/kbs/:kb/documents/*`    | DELETE     | Delete a document         |
+| `/admin/kbs/:kb`                | DELETE     | Delete a KB               |
+| `/document`                     | GET        | Read a document's content |
+| `/admin/reindex`                | POST       | Force reindex             |
+| `/admin/jobs`                   | GET        | Queue stats + failed jobs |
+| `/admin/jobs/:id/retry`         | POST       | Retry a failed job        |
+| `/admin/status`                 | GET        | Index status              |
+| `/search?query=…&kb=…&top_k=10` | GET        | Hybrid search             |
 
 See the [MCP tools](https://openhoat.github.io/rag-hub-mcp/guide/mcp-tools) and [REST API](https://openhoat.github.io/rag-hub-mcp/guide/rest-api) docs for the full detail.
 
@@ -138,7 +142,6 @@ Set via environment variables (`MCP_API_KEY`, `EMBEDDINGS_BASE_URL`, `EMBEDDINGS
 
 ## Roadmap
 
-- **Async indexing** — job queue + worker (store-backed, Redis-pluggable) for non-blocking, crash-safe scans
 - Native pgvector similarity search in the PostgreSQL backend (`<=>` / `LIMIT k`)
 - Streaming search results over MCP
 - Web UI dashboard (stats, documents, live search)
@@ -162,7 +165,7 @@ npm start -- --http     # start in HTTP mode (REST + streamable-http MCP)
 npm run start:inspector # open the MCP Inspector web UI (launches via tsx, no build)
 ```
 
-Uses **Biome** for linting/formatting and **vitest** for unit + e2e tests. The source is split into layered modules (`core/`, `pipeline/`, `transport/`, `testing/`) — see the [architecture](https://openhoat.github.io/rag-hub-mcp/guide/architecture) doc for the full picture. Contributions are welcome.
+Uses **Biome** for linting/formatting and **vitest** for unit + e2e tests. The source is split into domain modules (`shared/`, `embeddings/`, `storage/`, `indexing/`, `search/`, `transport/`) — see the [architecture](https://openhoat.github.io/rag-hub-mcp/guide/architecture) doc for the full picture. Contributions are welcome.
 
 ## License
 

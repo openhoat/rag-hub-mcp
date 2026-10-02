@@ -20,7 +20,7 @@ features:
   - title: Folders are knowledge bases
     details: 1st-level folder = 1 KB, named after the folder. Drop documents, let indexing pick them up.
   - title: MCP-native
-    details: 9 tools over the Model Context Protocol. Works with opencode, Claude Code, Cline and more.
+    details: 10 tools over the Model Context Protocol. Works with opencode, Claude Code, Cline and more.
   - title: Hybrid search
     details: Vector cosine similarity fused with SQLite FTS5 keyword search, weighted and scored per chunk.
   - title: Multi-format
@@ -28,5 +28,5 @@ features:
   - title: Self-hosted & private
     details: Your documents never leave your machine. Embeddings come from an OpenAI-compatible endpoint you control.
   - title: Zero infrastructure
-    details: One SQLite database with FTS5. No vector database, no separate services, no server to keep running.
+    details: One SQLite database with FTS5 by default. No vector database, no separate services, no server to keep running. A PostgreSQL + pgvector backend is available as an opt-in.
 ---
