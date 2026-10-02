@@ -14,11 +14,6 @@
 
 - [ ] Implementation
 
-### #11 [BUG] Pas de timeout sur les appels embeddings/LLM
-
-- [ ] `AbortSignal.timeout` sur les `fetch` de `embed.ts` et `contextual-chunking.ts`
-- [ ] rendre le fallback per-chunk réellement utile en cas de hang
-
 ### #12 [BUG] Concurrency worker = débit d'acquisition, pas un plafond
 
 - [ ] plafonner réellement `inFlight.size < INDEXER_CONCURRENCY` dans `worker.ts`
