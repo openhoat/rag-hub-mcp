@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { ENV_KEYS } from './config.js'
 
@@ -124,5 +125,27 @@ describe('config', () => {
     expect(env.EMBEDDINGS_TIMEOUT_MS).toBe(1000)
     expect(env.CONTEXTUAL_CHUNKING_TIMEOUT_MS).toBe(2000)
     expect(env.CONTEXTUAL_CHUNKING_CONCURRENCY).toBe(2)
+  })
+
+  test('VERSION defaults to the package.json version', async () => {
+    const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')) as {
+      version: string
+    }
+    const { env } = await importConfig()
+    expect(env.VERSION).toBe(pkg.version)
+  })
+
+  test('rate limits default to 60 per minute', async () => {
+    const { env } = await importConfig()
+    expect(env.SEARCH_RATE_PER_MINUTE).toBe(60)
+    expect(env.REINDEX_RATE_PER_MINUTE).toBe(60)
+  })
+
+  test('coerces rate limit overrides', async () => {
+    process.env.SEARCH_RATE_PER_MINUTE = '10'
+    process.env.REINDEX_RATE_PER_MINUTE = '5'
+    const { env } = await importConfig()
+    expect(env.SEARCH_RATE_PER_MINUTE).toBe(10)
+    expect(env.REINDEX_RATE_PER_MINUTE).toBe(5)
   })
 })

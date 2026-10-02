@@ -313,9 +313,13 @@ describe('rest', () => {
   })
 
   test('should return 429 on /search when the rate limit is exceeded', async () => {
-    process.env.SEARCH_RATE_PER_MINUTE = '1'
+    // config.ts resolves the rate limits once at module load, so rest.ts is
+    // re-imported with the override stubbed beforehand to observe the limit.
+    vi.resetModules()
+    vi.stubEnv('SEARCH_RATE_PER_MINUTE', '1')
     try {
-      const started = await startHttpServer(await createRestApp(makeStubStore(), makeStubQueue()))
+      const { createRestApp: createLimitedApp } = await import('./rest.js')
+      const started = await startHttpServer(await createLimitedApp(makeStubStore(), makeStubQueue()))
       const limitedServer = started.server
       const limitedBase = started.base
       try {
@@ -331,7 +335,7 @@ describe('rest', () => {
         limitedServer.close()
       }
     } finally {
-      delete process.env.SEARCH_RATE_PER_MINUTE
+      vi.unstubAllEnvs()
     }
   })
 })

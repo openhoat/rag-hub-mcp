@@ -119,8 +119,8 @@ export const createRestApp = async (store: Store, queue: JobQueue) => {
     await app.register(cors, { origin: CORS_ORIGINS })
   }
 
-  const SEARCH_LIMIT = Number.parseInt(process.env.SEARCH_RATE_PER_MINUTE || '60', 10)
-  const REINDEX_LIMIT = Number.parseInt(process.env.REINDEX_RATE_PER_MINUTE || '60', 10)
+  const SEARCH_LIMIT = env.SEARCH_RATE_PER_MINUTE
+  const REINDEX_LIMIT = env.REINDEX_RATE_PER_MINUTE
 
   await app.register(rateLimit, {
     global: false,

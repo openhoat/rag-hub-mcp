@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { packageVersion } from './version.js'
 
 // Central environment schema. Parsed once at module load (fail-fast with a
 // clear Zod error) and coerced to proper types, so call sites never read
@@ -43,7 +44,7 @@ const EnvSchema = z.object({
   // Additional text file extensions to index, comma-separated (e.g. ".kt,.java").
   // Merged with the built-in list at extract time, not a replacement.
   TEXT_EXTENSIONS: z.string().default(''),
-  VERSION: z.string().default('1.3.0'),
+  VERSION: z.string().default(packageVersion),
   INDEXER_CONCURRENCY: z.coerce.number().int().min(1).default(4),
   INDEXER_RETRY_MAX: z.coerce.number().int().min(0).default(3),
   INDEXER_STALE_TIMEOUT: z.coerce.number().int().min(1).default(300),
@@ -53,6 +54,8 @@ const EnvSchema = z.object({
   MCP_SESSION_TTL_SECONDS: z.coerce.number().int().min(0).default(1800),
   MCP_SESSION_MAX: z.coerce.number().int().min(1).default(100),
   MCP_SESSION_CREATE_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(30),
+  SEARCH_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(60),
+  REINDEX_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(60),
 })
 
 export const env = EnvSchema.parse(process.env)

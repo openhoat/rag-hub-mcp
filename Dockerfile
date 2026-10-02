@@ -11,6 +11,7 @@ FROM node:24-slim AS runner
 WORKDIR /app
 RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/dist/build ./dist/build
+COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 RUN mkdir -p /data/kbs /data/index
 EXPOSE 8000
