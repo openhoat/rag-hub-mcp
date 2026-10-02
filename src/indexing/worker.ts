@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { env } from '../shared/config.js'
 import { getLogger } from '../shared/log.js'
+import { sanitizeRelativePath } from '../shared/path.js'
 import type { IndexJob, JobQueue, Store, Worker } from '../shared/types.js'
 import { indexFile } from './ingest.js'
 
@@ -48,8 +48,8 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
   }
 
   const processJob = async (job: IndexJob): Promise<void> => {
-    const fullPath = join(KB_ROOT, job.kb, job.relPath)
     try {
+      const fullPath = sanitizeRelativePath(KB_ROOT, job.kb, job.relPath)
       if (!existsSync(fullPath)) {
         await queue.complete(job.id)
         return
