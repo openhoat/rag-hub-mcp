@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { env } from '../shared/config.js'
 import type { JobQueue, Store } from '../shared/types.js'
 import { createSqliteStore } from '../storage/sqlite/store.js'
 
@@ -133,6 +134,46 @@ describe('indexFile', () => {
     expect(content).toContain('paragraph content')
     expect(context?.path).toBe('a.md')
     expect(context?.headings).toBe('heading')
+  })
+
+  test('should bound contextual chunking concurrency per document', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), 'unused', 'utf-8')
+    await store.addKb('docs')
+    const kbId = (await store.getKbId('docs')) as number
+
+    // Ten paragraphs larger than CHUNK_MAX_CHARS -> ten chunks. An unbounded
+    // Promise.all would enrich (and call the LLM for) all of them at once.
+    const paragraph = 'para content filler '.repeat(150)
+    vi.mocked(extractText).mockImplementationOnce(async () => ({
+      text: Array.from({ length: 10 }, () => paragraph).join('\n\n'),
+      frontmatter: null,
+    }))
+
+    let active = 0
+    let maxActive = 0
+    vi.mocked(enrichChunkContent).mockImplementation(async content => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      await new Promise(resolve => setTimeout(resolve, 1))
+      active--
+      return content
+    })
+
+    try {
+      await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', {
+        mtimeMs: 0,
+        size: 40,
+      })
+    } finally {
+      vi.mocked(enrichChunkContent).mockImplementation(async content => content)
+    }
+
+    const chunks = await store.getAllChunks('docs')
+    expect(chunks.length).toBeGreaterThan(env.CONTEXTUAL_CHUNKING_CONCURRENCY)
+    expect(maxActive).toBeLessThanOrEqual(env.CONTEXTUAL_CHUNKING_CONCURRENCY)
   })
 })
 

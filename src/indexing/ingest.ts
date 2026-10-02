@@ -5,6 +5,7 @@ import fastGlob from 'fast-glob'
 import { embedTexts } from '../embeddings/embed.js'
 import { env } from '../shared/config.js'
 import { getLogger } from '../shared/log.js'
+import { mapLimit } from '../shared/map-limit.js'
 import { sanitizeKbDir, sanitizeRelativePath } from '../shared/path.js'
 import type { IngestResult, JobQueue, Store } from '../shared/types.js'
 import { chunkText } from './pipeline/chunk.js'
@@ -266,18 +267,16 @@ export const indexFile = async (
   const chunks = chunkText(text, relPath, kbName, frontmatter)
   if (chunks.length === 0) return false
 
-  const texts = await Promise.all(
-    chunks.map(c => {
-      const meta = JSON.parse(c.metadata) as {
-        path?: string
-        headings?: string
-      }
-      return enrichChunkContent(c.content, {
-        path: meta.path ?? relPath,
-        headings: meta.headings ?? '',
-      })
-    }),
-  )
+  const texts = await mapLimit(chunks, env.CONTEXTUAL_CHUNKING_CONCURRENCY, c => {
+    const meta = JSON.parse(c.metadata) as {
+      path?: string
+      headings?: string
+    }
+    return enrichChunkContent(c.content, {
+      path: meta.path ?? relPath,
+      headings: meta.headings ?? '',
+    })
+  })
   let embeddings: Float32Array[] = []
   try {
     embeddings = await embedTexts(texts)

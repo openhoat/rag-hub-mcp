@@ -23,6 +23,7 @@ const EnvSchema = z.object({
   CONTEXTUAL_CHUNKING_MODEL: z.string().optional(),
   CONTEXTUAL_CHUNKING_BASE_URL: z.string().optional(),
   CONTEXTUAL_CHUNKING_TIMEOUT_MS: z.coerce.number().int().min(1).default(60_000),
+  CONTEXTUAL_CHUNKING_CONCURRENCY: z.coerce.number().int().min(1).default(4),
   STORE_BACKEND: z.enum(['sqlite', 'postgres']).default('sqlite'),
   DATABASE_URL: z.string().optional(),
   PG_HOST: z.string().optional(),

@@ -109,17 +109,20 @@ describe('config', () => {
     expect(env.CONTEXTUAL_CHUNKING_MODEL).toBe('qwen2.5:0.5b')
   })
 
-  test('timeout defaults', async () => {
+  test('timeout and concurrency defaults', async () => {
     const { env } = await importConfig()
     expect(env.EMBEDDINGS_TIMEOUT_MS).toBe(60000)
     expect(env.CONTEXTUAL_CHUNKING_TIMEOUT_MS).toBe(60000)
+    expect(env.CONTEXTUAL_CHUNKING_CONCURRENCY).toBe(4)
   })
 
-  test('coerces timeout overrides', async () => {
+  test('coerces timeout and concurrency overrides', async () => {
     process.env.EMBEDDINGS_TIMEOUT_MS = '1000'
     process.env.CONTEXTUAL_CHUNKING_TIMEOUT_MS = '2000'
+    process.env.CONTEXTUAL_CHUNKING_CONCURRENCY = '2'
     const { env } = await importConfig()
     expect(env.EMBEDDINGS_TIMEOUT_MS).toBe(1000)
     expect(env.CONTEXTUAL_CHUNKING_TIMEOUT_MS).toBe(2000)
+    expect(env.CONTEXTUAL_CHUNKING_CONCURRENCY).toBe(2)
   })
 })

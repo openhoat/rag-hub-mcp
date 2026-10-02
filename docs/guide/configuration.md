@@ -20,6 +20,7 @@ All configuration is done through environment variables. Variables are validated
 | `CONTEXTUAL_CHUNKING_BASE_URL`       | `EMBEDDINGS_BASE_URL`                            | OpenAI-compatible `/v1/chat/completions` endpoint used to generate chunk context. Defaults to the embeddings base URL.                                                                           |
 | `CONTEXTUAL_CHUNKING_MODEL`          | `phi3:minimal`                                   | Lightweight LLM that writes the per-chunk context sentence.                                                                                                                                      |
 | `CONTEXTUAL_CHUNKING_TIMEOUT_MS`     | `60000`                                          | Abort a single context-generation call after this delay (ms).                                                                                                                                    |
+| `CONTEXTUAL_CHUNKING_CONCURRENCY`    | `4`                                              | Max concurrent `/chat/completions` calls per document while enriching chunks.                                                                                                                    |
 | `KB_ROOT`                            | `./kbs` (stdio) / `/data/kbs` (http)             | Root directory for knowledge base folders.                                                                                                                                                       |
 | `SCAN_INTERVAL`                      | `300`                                            | Scan interval in seconds (0 = disabled). HTTP mode only.                                                                                                                                         |
 | `INDEXER_CONCURRENCY`                | `4`                                              | Number of index jobs processed in parallel by the async worker.                                                                                                                                  |
@@ -92,7 +93,8 @@ CONTEXTUAL_CHUNKING_MODEL=phi3:minimal
 
 Opt-in and default-off. `CONTEXTUAL_CHUNKING_BASE_URL` defaults to
 `EMBEDDINGS_BASE_URL`; pick a light model (`phi3:minimal`, `qwen2.5:0.5b`, …)
-since it is called once per chunk at index time. Each call is aborted after
+since it is called once per chunk at index time. Concurrent calls are bounded
+per document by `CONTEXTUAL_CHUNKING_CONCURRENCY` and each call is aborted after
 `CONTEXTUAL_CHUNKING_TIMEOUT_MS`. When the LLM is unreachable or too slow, the
 chunk is embedded raw so indexing never fails.
 
