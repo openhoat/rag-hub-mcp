@@ -94,3 +94,42 @@ describe('worker path hardening', () => {
     expect(indexFile).not.toHaveBeenCalled()
   })
 })
+
+describe('worker concurrency', () => {
+  test('should never claim more jobs than the in-flight cap allows', async () => {
+    vi.useFakeTimers()
+    const releases: Array<() => void> = []
+    vi.mocked(indexFile).mockImplementation(
+      () =>
+        new Promise<boolean>(resolve => {
+          releases.push(() => resolve(true))
+        }),
+    )
+    try {
+      const jobs = Array.from({ length: 10 }, (_, i) => makeJob({ id: i + 1 }))
+      const { queue } = start(jobs)
+
+      // First poll: at most CONCURRENCY (4) jobs are claimed.
+      await vi.advanceTimersByTimeAsync(1)
+      expect(queue.claim).toHaveBeenCalledTimes(1)
+      expect(queue.claim).toHaveBeenNthCalledWith(1, 4)
+
+      // All four slots are busy: the next poll claims nothing.
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(queue.claim).toHaveBeenCalledTimes(1)
+
+      // A job completes -> exactly one free slot on the following poll.
+      releases.shift()?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(queue.claim).toHaveBeenCalledTimes(2)
+      expect(queue.claim).toHaveBeenNthCalledWith(2, 1)
+
+      // Release the rest so afterEach can stop the worker without hanging.
+      for (const release of releases) release()
+      await vi.advanceTimersByTimeAsync(1)
+    } finally {
+      vi.mocked(indexFile).mockImplementation(async () => true)
+      vi.useRealTimers()
+    }
+  })
+})

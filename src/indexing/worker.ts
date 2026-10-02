@@ -33,7 +33,9 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
   const poll = async (): Promise<void> => {
     try {
       await queue.reclaimStale(STALE_TIMEOUT)
-      const jobs = await queue.claim(CONCURRENCY)
+      const free = CONCURRENCY - inFlight.size
+      if (free <= 0) return
+      const jobs = await queue.claim(free)
       for (const job of jobs) {
         const p = processJob(job)
         inFlight.add(p)
