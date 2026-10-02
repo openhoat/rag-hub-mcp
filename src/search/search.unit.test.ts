@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ChunkRecord, Store } from '../shared/types.js'
 import { makeChunk, makeStubStore, stubEmbeddingsApi, unitEmbeddings } from '../test/helpers'
 import { search } from './search.js'
@@ -25,6 +25,8 @@ beforeEach(() => {
 
 afterEach(() => {
   restoreFetch?.()
+  vi.unstubAllEnvs()
+  vi.resetModules()
 })
 
 describe('search', () => {
@@ -40,6 +42,27 @@ describe('search', () => {
     expect(results.length).toBeGreaterThan(0)
     expect(results[0].relPath).toBe('kb/file.md')
     expect(results[0].content.length).toBeLessThanOrEqual(1000)
+  })
+
+  test('should truncate content to the default snippet size (1000 chars)', async () => {
+    const store = makeStore([makeChunk(1, 'kb', `alpha ${'x'.repeat(1500)}`)])
+    const results = await search(store, { query: 'alpha', kb: 'kb', topK: 5 })
+    expect(results[0].content).toHaveLength(1000)
+  })
+
+  test('should honour an explicit snippet max chars', async () => {
+    const store = makeStore([makeChunk(1, 'kb', `alpha ${'x'.repeat(200)}`)])
+    const results = await search(store, { query: 'alpha', kb: 'kb', topK: 5 }, 50)
+    expect(results[0].content).toHaveLength(50)
+  })
+
+  test('should read the snippet cap from SEARCH_SNIPPET_MAX_CHARS', async () => {
+    vi.stubEnv('SEARCH_SNIPPET_MAX_CHARS', '4000')
+    vi.resetModules()
+    const { search: freshSearch } = await import('./search.js')
+    const store = makeStore([makeChunk(1, 'kb', `alpha ${'x'.repeat(1500)}`)])
+    const results = await freshSearch(store, { query: 'alpha', kb: 'kb', topK: 5 })
+    expect(results[0].content.length).toBeGreaterThan(1000)
   })
 
   test('should filter by knowledge base', async () => {

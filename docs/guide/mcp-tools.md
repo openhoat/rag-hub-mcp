@@ -54,6 +54,12 @@
 - `kb` (optional): restrict to one knowledge base.
 - `top_k` (optional, default 10): number of results.
 
+Each result's `content` is truncated to `SEARCH_SNIPPET_MAX_CHARS` (default
+`1000`, see [Configuration](./configuration)). The cap is independent from the
+indexing-time `CHUNK_MAX_CHARS`, so a retrieved chunk may be longer than its
+snippet. Use `rag_read` to get the full content of a document when the relevant
+part sits past the cap.
+
 ## `rag_add_document`
 
 - `kb` (required): knowledge base name; the folder is created if needed.

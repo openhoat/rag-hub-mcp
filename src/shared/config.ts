@@ -17,6 +17,11 @@ const EnvSchema = z.object({
   EMBEDDINGS_DIMENSION: z.coerce.number().int().min(1).default(1024),
   EMBEDDINGS_TIMEOUT_MS: z.coerce.number().int().min(1).default(60_000),
   CHUNK_MAX_CHARS: z.coerce.number().int().min(1).default(3200),
+  // Max characters of chunk content returned per search result (MCP rag_search
+  // and REST GET /search). Kept independent from CHUNK_MAX_CHARS so indexed
+  // chunks can stay whole while search snippets stay small. Use rag_read for
+  // the full document content.
+  SEARCH_SNIPPET_MAX_CHARS: z.coerce.number().int().min(1).default(1000),
   CONTEXTUAL_CHUNKING_ENABLED: z
     .enum(['true', 'false'])
     .optional()

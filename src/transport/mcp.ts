@@ -61,7 +61,7 @@ export const createMcpServer = (store: Store, queue: JobQueue): McpServer => {
     'rag_search',
     {
       description:
-        'Search knowledge bases. Write a self-contained query with full context (e.g. "API v2 rate limits", not "the other version"). kb is optional: without kb searches all.',
+        'Search knowledge bases. Write a self-contained query with full context (e.g. "API v2 rate limits", not "the other version"). kb is optional: without kb searches all. Each result content is truncated (SEARCH_SNIPPET_MAX_CHARS, default 1000); use rag_read for the full document content.',
       inputSchema: searchArgs,
     },
     async args => handleToolCall(store, queue, 'rag_search', args),
