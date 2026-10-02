@@ -1,4 +1,5 @@
 import { cosineSimilarity, embedTexts } from '../embeddings/embed.js'
+import { env } from '../shared/config.js'
 import { getLogger } from '../shared/log.js'
 import type { ChunkRecord, SearchResult, Store } from '../shared/types.js'
 
@@ -8,7 +9,11 @@ export interface SearchParams {
   topK?: number
 }
 
-export const search = async (store: Store, params: SearchParams): Promise<SearchResult[]> => {
+export const search = async (
+  store: Store,
+  params: SearchParams,
+  snippetMaxChars: number = env.SEARCH_SNIPPET_MAX_CHARS,
+): Promise<SearchResult[]> => {
   const { query, kb, topK = 10 } = params
 
   const queryEmb = await embedQueries(query)
@@ -34,7 +39,7 @@ export const search = async (store: Store, params: SearchParams): Promise<Search
       kb: meta.kb,
       relPath: meta.path,
       chunkIndex: meta.chunkIndex,
-      content: s.content.slice(0, 1000),
+      content: s.content.slice(0, snippetMaxChars),
       score: Math.round(s.score * 100) / 100,
     }
   })

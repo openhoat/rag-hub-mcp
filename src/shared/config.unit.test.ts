@@ -148,4 +148,15 @@ describe('config', () => {
     expect(env.SEARCH_RATE_PER_MINUTE).toBe(10)
     expect(env.REINDEX_RATE_PER_MINUTE).toBe(5)
   })
+
+  test('search snippet cap defaults to 1000 chars', async () => {
+    const { env } = await importConfig()
+    expect(env.SEARCH_SNIPPET_MAX_CHARS).toBe(1000)
+  })
+
+  test('coerces search snippet cap override', async () => {
+    process.env.SEARCH_SNIPPET_MAX_CHARS = '4000'
+    const { env } = await importConfig()
+    expect(env.SEARCH_SNIPPET_MAX_CHARS).toBe(4000)
+  })
 })
