@@ -32,11 +32,6 @@
 
 - [ ] distinguer la création (sans `Mcp-Session-Id`) du trafic des sessions existantes
 
-### #17 [PERF] Contextual chunking sans garde-fou
-
-- [ ] limiter la concurrence des appels `/chat/completions` + timeout
-- [ ] éviter le `Promise.all` sur tous les chunks d'un gros document
-
 ### #18 [QA] Couverture faible du code critique
 
 - [ ] `worker.ts` (~70 % : reste `stop`/`drain`/branches d'erreur, `worker.unit.test.ts` ajouté), `postgres/job-queue.ts` (~0 %), `db.ts` (~19 %) : poll/claim/retry/reclaimStale
