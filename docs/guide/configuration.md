@@ -14,10 +14,12 @@ All configuration is done through environment variables. Variables are validated
 | `EMBEDDINGS_API_KEY`                 | _(none)_                                         | Bearer token for the embeddings API.                                                                                                                                                             |
 | `EMBEDDINGS_MODEL`                   | `bge-m3`                                         | Embedding model name.                                                                                                                                                                            |
 | `EMBEDDINGS_DIMENSION`               | `1024`                                           | Fixed vector dimension for the embedding column (bge-m3 = 1024). Used by the PostgreSQL backend to size the pgvector column.                                                                     |
+| `EMBEDDINGS_TIMEOUT_MS`              | `60000`                                          | Abort the embeddings HTTP call after this delay (ms) instead of hanging.                                                                                                                         |
 | `CHUNK_MAX_CHARS`                    | `3200`                                           | Maximum characters per text chunk. Lower it for small-token embedding models. See [Chunk sizing](#chunk-sizing) below.                                                                           |
 | `CONTEXTUAL_CHUNKING_ENABLED`        | `false`                                          | At indexing time, generate a short context sentence per chunk (via the configured LLM) that is prepended to the chunk before embedding. See [Contextual chunking](#contextual-chunking) below.   |
 | `CONTEXTUAL_CHUNKING_BASE_URL`       | `EMBEDDINGS_BASE_URL`                            | OpenAI-compatible `/v1/chat/completions` endpoint used to generate chunk context. Defaults to the embeddings base URL.                                                                           |
 | `CONTEXTUAL_CHUNKING_MODEL`          | `phi3:minimal`                                   | Lightweight LLM that writes the per-chunk context sentence.                                                                                                                                      |
+| `CONTEXTUAL_CHUNKING_TIMEOUT_MS`     | `60000`                                          | Abort a single context-generation call after this delay (ms).                                                                                                                                    |
 | `KB_ROOT`                            | `./kbs` (stdio) / `/data/kbs` (http)             | Root directory for knowledge base folders.                                                                                                                                                       |
 | `SCAN_INTERVAL`                      | `300`                                            | Scan interval in seconds (0 = disabled). HTTP mode only.                                                                                                                                         |
 | `INDEXER_CONCURRENCY`                | `4`                                              | Number of index jobs processed in parallel by the async worker.                                                                                                                                  |
@@ -90,8 +92,9 @@ CONTEXTUAL_CHUNKING_MODEL=phi3:minimal
 
 Opt-in and default-off. `CONTEXTUAL_CHUNKING_BASE_URL` defaults to
 `EMBEDDINGS_BASE_URL`; pick a light model (`phi3:minimal`, `qwen2.5:0.5b`, …)
-since it is called once per chunk at index time. When the LLM is unreachable,
-the chunk is embedded raw so indexing never fails.
+since it is called once per chunk at index time. Each call is aborted after
+`CONTEXTUAL_CHUNKING_TIMEOUT_MS`. When the LLM is unreachable or too slow, the
+chunk is embedded raw so indexing never fails.
 
 > Note — enabling contextual chunking changes embeddings, so **rebuild the index
 > from scratch** (`rag_reindex { force: true }` via MCP, or

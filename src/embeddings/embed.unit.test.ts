@@ -66,4 +66,23 @@ describe('embedTexts', () => {
     vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => ({ nope: true }) }))
     await expect(embedTexts(['x'], { baseUrl: 'http://e/v1', model: 'm' })).rejects.toThrow('unrecognized embeddings response format')
   })
+
+  test('should pass an abort timeout signal to fetch', async () => {
+    let signal: AbortSignal | undefined
+    vi.stubGlobal('fetch', async (_url: string, init: { signal?: AbortSignal }) => {
+      signal = init.signal
+      return { ok: true, json: async () => ({ data: [{ embedding: [1, 0] }] }) }
+    })
+    await embedTexts(['x'], { baseUrl: 'http://e/v1', model: 'm', timeoutMs: 1000 })
+    expect(signal).toBeInstanceOf(AbortSignal)
+  })
+
+  test('should reject when the call exceeds the configured timeout', async () => {
+    vi.stubGlobal('fetch', (_url: string, init: { signal: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(init.signal.reason))
+      })
+    })
+    await expect(embedTexts(['x'], { baseUrl: 'http://e/v1', model: 'm', timeoutMs: 5 })).rejects.toThrow()
+  })
 })

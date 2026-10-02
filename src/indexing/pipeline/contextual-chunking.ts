@@ -13,6 +13,7 @@ export interface ContextualChunkingConfig {
   baseUrl: string
   model: string
   apiKey?: string
+  timeoutMs?: number
 }
 
 export const defaultConfig = (): ContextualChunkingConfig => {
@@ -21,6 +22,7 @@ export const defaultConfig = (): ContextualChunkingConfig => {
     baseUrl: env.CONTEXTUAL_CHUNKING_BASE_URL ?? env.EMBEDDINGS_BASE_URL,
     model: env.CONTEXTUAL_CHUNKING_MODEL ?? 'phi3:minimal',
     apiKey: env.EMBEDDINGS_API_KEY || undefined,
+    timeoutMs: env.CONTEXTUAL_CHUNKING_TIMEOUT_MS,
   }
 }
 
@@ -73,7 +75,12 @@ const generateContext = async (content: string, context: ChunkContext | undefine
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(config.timeoutMs ?? 60_000),
+  })
   if (!res.ok) throw new Error(`chat completions error ${res.status}`)
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
   return data.choices?.[0]?.message?.content?.trim() ?? ''

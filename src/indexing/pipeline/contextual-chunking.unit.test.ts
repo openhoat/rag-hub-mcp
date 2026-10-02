@@ -68,4 +68,24 @@ describe('enrichChunkContent', () => {
     const result = await enrichChunkContent('raw chunk', undefined, config())
     expect(result).toBe('raw chunk')
   })
+
+  test('should pass an abort timeout signal to the chat completions endpoint', async () => {
+    let signal: AbortSignal | undefined
+    vi.stubGlobal('fetch', (_url: string, init: { signal?: AbortSignal }) => {
+      signal = init.signal
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'ctx' } }] }) }
+    })
+    await enrichChunkContent('raw chunk', undefined, config({ timeoutMs: 1000 }))
+    expect(signal).toBeInstanceOf(AbortSignal)
+  })
+
+  test('should fall back to the raw chunk when the call times out', async () => {
+    vi.stubGlobal('fetch', (_url: string, init: { signal: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(init.signal.reason))
+      })
+    })
+    const result = await enrichChunkContent('raw chunk', undefined, config({ timeoutMs: 5 }))
+    expect(result).toBe('raw chunk')
+  })
 })

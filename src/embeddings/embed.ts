@@ -5,6 +5,7 @@ export interface EmbedConfig {
   apiKey?: string
   model: string
   batchSize?: number
+  timeoutMs?: number
 }
 
 const defaultConfig = (): EmbedConfig => {
@@ -12,6 +13,7 @@ const defaultConfig = (): EmbedConfig => {
     baseUrl: env.EMBEDDINGS_BASE_URL,
     apiKey: env.EMBEDDINGS_API_KEY,
     model: env.EMBEDDINGS_MODEL,
+    timeoutMs: env.EMBEDDINGS_TIMEOUT_MS,
   }
 }
 
@@ -40,6 +42,7 @@ const embedBatch = async (texts: string[], config: EmbedConfig): Promise<number[
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(config.timeoutMs ?? 60_000),
   })
   if (!res.ok) {
     throw new Error(`embeddings API error ${res.status}`)
