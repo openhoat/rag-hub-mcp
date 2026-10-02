@@ -30,7 +30,7 @@
 
 ### Documentation
 
-* add ADRs and glossary, fix documentation drift ([0e6c649](https://github.com/openhoat/rag-hub-mcp/commit/0e6c649b71372a383910b97c7963fd45ea811f45)), closes [#20](https://github.com/openhoat/rag-hub-mcp/issues/20) [10-#19](https://github.com/10-/issues/19)
+* add ADRs and glossary, fix documentation drift ([0e6c649](https://github.com/openhoat/rag-hub-mcp/commit/0e6c649b71372a383910b97c7963fd45ea811f45)), closes [#20](https://github.com/openhoat/rag-hub-mcp/issues/20)
 
 ### Performance
 
