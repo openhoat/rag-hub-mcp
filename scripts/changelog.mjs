@@ -1,5 +1,4 @@
-import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { Writable } from 'node:stream'
 import { ConventionalChangelog } from 'conventional-changelog'
 
@@ -21,25 +20,22 @@ const COMMIT_HASH_LENGTH = 7
 
 let newContent = ''
 
+// `releaseCount: 0` regenerates the WHOLE changelog from git tags, so the file
+// is OVERWRITTEN — never prepended to its previous content. Prepending the full
+// regeneration used to duplicate the entire history on every release.
 const writable = new Writable({
   write(chunk, _encoding, callback) {
     newContent += chunk.toString()
     callback()
   },
   final(callback) {
-    if (existsSync('CHANGELOG.md')) {
-      readFile('CHANGELOG.md', 'utf-8')
-        .then(existingContent => {
-          const updatedContent = newContent + existingContent
-          return writeFile('CHANGELOG.md', updatedContent)
-        })
-        .then(() => callback())
-        .catch(callback)
-    } else {
-      writeFile('CHANGELOG.md', newContent)
-        .then(() => callback())
-        .catch(callback)
+    if (!newContent.trim()) {
+      callback(new Error('conventional-changelog produced empty output; CHANGELOG.md left unchanged'))
+      return
     }
+    writeFile('CHANGELOG.md', newContent.replace(/^\n+/, ''))
+      .then(() => callback())
+      .catch(callback)
   },
 })
 
@@ -51,14 +47,12 @@ generator
     options: { releaseCount: 0 },
     writer: {
       transform: commit => {
-        if (!commit.type || typeof commit.type !== 'string') return commit
-        const type = commit.type.toLowerCase()
-        const section = TYPE_SECTIONS[type]
-        return {
-          ...commit,
-          ...(section ? { type: section } : {}),
-          ...(typeof commit.hash === 'string' ? { shortHash: commit.hash.substring(0, COMMIT_HASH_LENGTH) } : {}),
-        }
+        // Always expose shortHash so the writer never renders `[undefined]`
+        // links for non-conventional commits (e.g. plain "Revert ...").
+        const enriched = typeof commit.hash === 'string' ? { ...commit, shortHash: commit.hash.substring(0, COMMIT_HASH_LENGTH) } : commit
+        if (!commit.type || typeof commit.type !== 'string') return enriched
+        const section = TYPE_SECTIONS[commit.type.toLowerCase()]
+        return section ? { ...enriched, type: section } : enriched
       },
     },
   })
