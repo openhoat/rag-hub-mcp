@@ -14,12 +14,6 @@
 
 - [ ] Implementation
 
-### #10 [SECURITY] Path traversal via `kb` — lecture/écriture/suppression arbitraire
-
-- [ ] valider `kb` contre `KB_ROOT` dans `sanitizeRelativePath` (comme le fait déjà `deleteKb`)
-- [ ] déplacer `mkdirSync` APRÈS la validation dans `addDocument`
-- [ ] ajouter des tests `kb='../..'` (addDocument/deleteDocument/readDocument)
-
 ### #11 [BUG] Pas de timeout sur les appels embeddings/LLM
 
 - [ ] `AbortSignal.timeout` sur les `fetch` de `embed.ts` et `contextual-chunking.ts`
