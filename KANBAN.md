@@ -23,11 +23,6 @@
 
 - [ ] refuser/skipper au-delà d'un seuil configurable avant `readFileSync`/`hashFile`
 
-### #15 [BUG] Config incohérente
-
-- [ ] `VERSION` = version de `package.json` (plus `1.3.0` codé en dur)
-- [ ] intégrer `SEARCH_RATE_PER_MINUTE`/`REINDEX_RATE_PER_MINUTE` au schema zod (hors `process.env` aujourd'hui)
-
 ### #16 [BUG] Rate-limit de création de session appliqué à tout `/mcp`
 
 - [ ] distinguer la création (sans `Mcp-Session-Id`) du trafic des sessions existantes
