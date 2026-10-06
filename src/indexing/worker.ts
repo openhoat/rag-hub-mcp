@@ -26,12 +26,23 @@ const handleJobError = async (queue: JobQueue, job: IndexJob, err: unknown): Pro
 
 export const createWorker = (store: Store, queue: JobQueue): Worker => {
   let running = false
+  let firstPoll = true
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   const inFlight = new Set<Promise<void>>()
   let drainResolve: (() => void) | null = null
 
   const poll = async (): Promise<void> => {
     try {
+      // On a fresh start no other process owns a 'processing' job, so reclaim
+      // any left behind by a previous instance instead of waiting a full
+      // STALE_TIMEOUT before it is picked up again.
+      if (firstPoll) {
+        firstPoll = false
+        const reclaimed = await queue.reclaimStale(0)
+        if (reclaimed > 0) {
+          logger.warn('reclaimed %d orphaned job(s) from a previous run', reclaimed)
+        }
+      }
       await queue.reclaimStale(STALE_TIMEOUT)
       const free = CONCURRENCY - inFlight.size
       if (free <= 0) return

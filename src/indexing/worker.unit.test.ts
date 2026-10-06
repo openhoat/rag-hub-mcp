@@ -95,6 +95,13 @@ describe('worker path hardening', () => {
   })
 })
 
+describe('worker startup reclaim', () => {
+  test('should reclaim orphaned jobs from a previous run on the first poll', async () => {
+    const { queue } = start([makeJob()])
+    await vi.waitFor(() => expect(queue.reclaimStale).toHaveBeenCalledWith(0))
+  })
+})
+
 describe('worker concurrency', () => {
   test('should never claim more jobs than the in-flight cap allows', async () => {
     vi.useFakeTimers()
