@@ -19,7 +19,7 @@ export const chunkText = (
   frontmatter: Record<string, string> | null = null,
   maxChars: number = env.CHUNK_MAX_CHARS,
 ): Chunk[] => {
-  const paragraphs = splitParagraphs(text)
+  const paragraphs = splitParagraphs(text, maxChars)
   const chunks: { content: string; metadata: string }[] = []
   let buffer: Paragraph[] = []
   let bufLen = 0
@@ -78,7 +78,7 @@ const buildChunk = (lines: Paragraph[], relPath: string, kb: string) => {
   }
 }
 
-const splitParagraphs = (text: string): Paragraph[] => {
+const splitParagraphs = (text: string, maxChars: number): Paragraph[] => {
   const headings: string[] = []
   const result: Paragraph[] = []
   const normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
@@ -96,10 +96,31 @@ const splitParagraphs = (text: string): Paragraph[] => {
       continue
     }
 
-    result.push({ text: line, headingPath: headings.filter(Boolean).join(' > ') })
+    const headingPath = headings.filter(Boolean).join(' > ')
+    for (const part of splitOversizedParagraph(line, maxChars)) {
+      result.push({ text: part, headingPath })
+    }
   }
 
   return result
+}
+
+/** Break a paragraph that alone exceeds maxChars into pieces, preferring a
+ *  newline then a space boundary, so a single huge block (e.g. a PDF or a
+ *  source file with no blank lines) can never become an oversized chunk. */
+const splitOversizedParagraph = (text: string, maxChars: number): string[] => {
+  if (text.length <= maxChars) return [text]
+  const parts: string[] = []
+  let rest = text
+  while (rest.length > maxChars) {
+    let cut = rest.lastIndexOf('\n', maxChars)
+    if (cut <= 0) cut = rest.lastIndexOf(' ', maxChars)
+    if (cut <= 0) cut = maxChars
+    parts.push(rest.slice(0, cut).trim())
+    rest = rest.slice(cut).trimStart()
+  }
+  if (rest) parts.push(rest)
+  return parts
 }
 
 const headingRegex = /^(#{1,6})[ \t]+(.+)/

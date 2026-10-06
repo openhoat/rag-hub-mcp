@@ -39,6 +39,25 @@ describe('chunkText', () => {
     expect(chunks.length).toBeGreaterThan(2)
   })
 
+  test('should split a single paragraph larger than maxChars', () => {
+    // One block with no blank-line separator (typical of PDF or minified
+    // extraction): it must be split instead of becoming one oversized chunk.
+    const text = 'word '.repeat(4000) // ~20k chars, single paragraph
+    const chunks = chunkText(text, 'big.md', 'kb', null, 1500)
+    expect(chunks.length).toBeGreaterThan(1)
+    const maxLen = Math.max(...chunks.map(c => c.content.length))
+    expect(maxLen).toBeLessThanOrEqual(2 * 1500 + 400)
+  })
+
+  test('should split an oversized paragraph on a newline boundary when present', () => {
+    const text = 'line of text\n'.repeat(500) // ~6.5k chars, newlines but no blank line
+    const chunks = chunkText(text, 'nl.md', 'kb', null, 1000)
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const chunk of chunks) {
+      expect(chunk.content.length).toBeLessThanOrEqual(2 * 1000 + 400)
+    }
+  })
+
   test('should carry heading path from the document', () => {
     const text = '# Title\n\n## Section\n\nSome content here.'
     const chunks = chunkText(text, 'h.md', 'kb')
