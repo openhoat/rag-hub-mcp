@@ -1,3 +1,16 @@
+## [1.5.1](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.0...v1.5.1) (2026-10-06)
+
+### Bug Fixes
+
+* **changelog:** drop false references parsed from prose like #10-#19 ([6ca5347](https://github.com/openhoat/rag-hub-mcp/commit/6ca534750360655db145acc1ff2fa3072f5848a5)), closes [#N](https://github.com/openhoat/rag-hub-mcp/issues/N) [owner/repo#N](https://github.com/owner/repo/issues/N)
+* **changelog:** overwrite instead of prepending to stop history duplication ([bc75beb](https://github.com/openhoat/rag-hub-mcp/commit/bc75beb8801de1d3561a2d7598864ab46fbc152d))
+* **chunk:** split oversized paragraphs into bounded chunks ([4e5ef37](https://github.com/openhoat/rag-hub-mcp/commit/4e5ef37759d5fa9a7141d78a275d8ec8ca3073db))
+* **worker:** reclaim orphaned jobs on startup ([4e234de](https://github.com/openhoat/rag-hub-mcp/commit/4e234dee22f8f284f737b332acfa20ee9bf7dafe))
+
+### Documentation
+
+* **kanban:** translate remaining entries to English ([833a420](https://github.com/openhoat/rag-hub-mcp/commit/833a42052f9b1a3b1b9958135eaa2468f09607fb))
+
 # [1.5.0](https://github.com/openhoat/rag-hub-mcp/compare/v1.4.5...v1.5.0) (2026-10-02)
 
 ### Bug Fixes
