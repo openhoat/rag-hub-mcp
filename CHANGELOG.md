@@ -1,3 +1,34 @@
+## [1.5.4](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.3...v1.5.4) (2026-10-12)
+
+### Chores
+
+* **indexer:** pg queue on poolToDb, worker coverage, scan/worker lost-update fix ([a477919](https://github.com/openhoat/rag-hub-mcp/commit/a47791990d29750ed8298b010267c0e2f6aa83db))
+* **release:** bump version to v1.5.4 ([3a5c6c9](https://github.com/openhoat/rag-hub-mcp/commit/3a5c6c99d62583d5d522f58398fc949fbf75a827))
+
+## [1.5.3](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.2...v1.5.3) (2026-10-12)
+
+### Chores
+
+* **release:** bump version to v1.5.3 ([dd0d78e](https://github.com/openhoat/rag-hub-mcp/commit/dd0d78e98d1be916c362376a9cff1db801b4b84d))
+
+### Features
+
+* **indexer:** expose per-job chunk progress ([4bfef40](https://github.com/openhoat/rag-hub-mcp/commit/4bfef403575f27b2443736e99c0cdef373b26f0a)), closes [#25](https://github.com/openhoat/rag-hub-mcp/issues/25)
+
+## [1.5.2](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.1...v1.5.2) (2026-10-12)
+
+### Chores
+
+* **release:** bump version to v1.5.2 ([015b8d8](https://github.com/openhoat/rag-hub-mcp/commit/015b8d81e2eb31a192fdb63f02c7bd82767141b4))
+
+### Documentation
+
+* document indexer robustness knobs and add ADR 0008 ([2fe7f9b](https://github.com/openhoat/rag-hub-mcp/commit/2fe7f9b81b28780939d2a6a5c23549eaeae9d05b))
+
+### Features
+
+* **indexer:** bound job runtime, retry backoff and safe reclaim ([963545f](https://github.com/openhoat/rag-hub-mcp/commit/963545f00e59f01157a6bf0bc85c4ba7a62350dc))
+
 ## [1.5.1](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.0...v1.5.1) (2026-10-06)
 
 ### Bug Fixes
@@ -6,6 +37,10 @@
 * **changelog:** overwrite instead of prepending to stop history duplication ([bc75beb](https://github.com/openhoat/rag-hub-mcp/commit/bc75beb8801de1d3561a2d7598864ab46fbc152d))
 * **chunk:** split oversized paragraphs into bounded chunks ([4e5ef37](https://github.com/openhoat/rag-hub-mcp/commit/4e5ef37759d5fa9a7141d78a275d8ec8ca3073db))
 * **worker:** reclaim orphaned jobs on startup ([4e234de](https://github.com/openhoat/rag-hub-mcp/commit/4e234dee22f8f284f737b332acfa20ee9bf7dafe))
+
+### Chores
+
+* **release:** bump version to v1.5.1 ([ed15b6f](https://github.com/openhoat/rag-hub-mcp/commit/ed15b6fe41949307d868254c563459ad8e3be1b4))
 
 ### Documentation
 
