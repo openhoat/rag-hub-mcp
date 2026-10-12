@@ -26,7 +26,10 @@ All configuration is done through environment variables. Variables are validated
 | `SCAN_INTERVAL`                      | `300`                                            | Scan interval in seconds (0 = disabled). HTTP mode only.                                                                                                                                         |
 | `INDEXER_CONCURRENCY`                | `4`                                              | Number of index jobs processed in parallel by the async worker.                                                                                                                                  |
 | `INDEXER_RETRY_MAX`                  | `3`                                              | Attempts before a failed job is parked (manual retry via `/admin/jobs/:id/retry`).                                                                                                               |
-| `INDEXER_STALE_TIMEOUT`              | `300`                                            | Seconds before a `processing` job orphaned by a crash is reclaimed as `pending`.                                                                                                                 |
+| `INDEXER_STALE_TIMEOUT`              | `1800`                                           | Seconds before a `processing` job orphaned by a crash is reclaimed as `pending`. Keep it above `INDEXER_JOB_TIMEOUT_MS`/1000 so a live job is never reclaimed.                                   |
+| `INDEXER_JOB_TIMEOUT_MS`             | `600000`                                         | Hard wall-clock deadline for a single job (ms). On expiry the job is aborted (signal propagated to the embeddings / contextual-chunking calls) and failed, instead of spinning forever.          |
+| `INDEXER_RETRY_BASE_MS`              | `5000`                                           | Base delay of the exponential retry backoff: `base * 2^(attempts-1)`. `0` disables backoff.                                                                                                      |
+| `INDEXER_RETRY_MAX_MS`               | `300000`                                         | Upper bound of the retry backoff delay (ms).                                                                                                                                                     |
 | `SEARCH_RATE_PER_MINUTE`             | `60`                                             | Rate limit on `GET /search` per minute per IP (HTTP mode only).                                                                                                                                  |
 | `REINDEX_RATE_PER_MINUTE`            | `60`                                             | Rate limit on `POST /admin/reindex` per minute per IP (HTTP mode only).                                                                                                                          |
 | `PORT`                               | `8000`                                           | HTTP listen port. HTTP mode only.                                                                                                                                                                |
@@ -160,6 +163,22 @@ Indexing is asynchronous. The **producer** (`scanAll`) discovers files on disk, 
   `status=failed`. It stays visible in `GET /admin/jobs` and can be retried manually
   via `POST /admin/jobs/:id/retry`. The scan never re-enqueues a parked job (no
   infinite retry loop).
+- **Retry backoff** — a failed attempt is not retried immediately: the job is parked
+  as `pending` with a `retry_at` timestamp computed as `INDEXER_RETRY_BASE_MS *
+2^(attempts-1)`, capped at `INDEXER_RETRY_MAX_MS`. The worker only claims jobs whose
+  `retry_at` has elapsed, so a struggling embeddings endpoint is not hammered.
+- **Per-job deadline** — every job runs under an `INDEXER_JOB_TIMEOUT_MS` wall-clock
+  deadline. On expiry the job's `AbortSignal` is propagated to the embeddings and
+  contextual-chunking HTTP calls (which are aborted) and the job is failed, rather than
+  hanging a worker slot forever.
 - **Crash recovery** — the `reclaimStale` mechanism runs every poll cycle: any job
-  stuck in `processing` for longer than `INDEXER_STALE_TIMEOUT` seconds is reset to
-  `pending` so the worker can pick it up again.
+  stuck in `processing` for longer than `INDEXER_STALE_TIMEOUT` seconds is reclaimed.
+  Reclaiming counts as an attempt, so a job that never completes eventually parks as
+  `failed` instead of looping between reclaim and claim forever. Keep
+  `INDEXER_STALE_TIMEOUT` above `INDEXER_JOB_TIMEOUT_MS`/1000 (a startup warning flags
+  the opposite) so a live job always finishes before it is considered stale. A worker
+  also never starts a second execution of a job whose previous attempt is still in
+  flight, even if it is re-claimed.
+- **Progress visibility** — `GET /admin/status` / `rag_status` report the number of
+  documents with unsearchable (null-embedding) chunks, and `GET /admin/jobs` /
+  `rag_jobs` list the jobs currently `processing` with their running time.
