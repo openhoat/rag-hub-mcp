@@ -3,7 +3,7 @@ import { retryBackoffMs } from '../../shared/backoff.js'
 import { env } from '../../shared/config.js'
 import type { IndexJob, JobQueue, JobStats, NewJob } from '../../shared/types.js'
 import type { Db } from './db.js'
-import { buildPoolConfig } from './db.js'
+import { buildPoolConfig, poolToDb } from './db.js'
 
 const RETRY_MAX = env.INDEXER_RETRY_MAX
 const RETRY_BASE_MS = env.INDEXER_RETRY_BASE_MS
@@ -51,7 +51,23 @@ const rowToJob = (r: Record<string, unknown>): IndexJob => ({
   progressTotal: r.progress_total == null ? null : Number(r.progress_total),
 })
 
-const completeJob = (db: Db, id: number): Promise<void> => db.query('DELETE FROM jobs WHERE id = $1', [id]) as unknown as Promise<void>
+// Removes a finished job, but only when it still carries the hash that was
+// indexed: a concurrent scan may have re-enqueued a newer version while the job
+// ran (stored sha256 changed), in which case the job is re-armed as 'pending'
+// instead of dropping the newer work (scan/worker lost update, KANBAN #19).
+const completeJob = async (db: Db, id: number, sha256?: string): Promise<void> => {
+  if (sha256 === undefined) {
+    await db.query('DELETE FROM jobs WHERE id = $1', [id])
+    return
+  }
+  const res = await db.query<{ id: number }>('DELETE FROM jobs WHERE id = $1 AND sha256 = $2 RETURNING id', [id, sha256])
+  if (res.rows.length === 0) {
+    await db.query(
+      "UPDATE jobs SET status = 'pending', started_at = NULL, progress_done = NULL, progress_total = NULL, retry_at = NULL WHERE id = $1",
+      [id],
+    )
+  }
+}
 
 const failedList0 = async (db: Db, limit = 20): Promise<IndexJob[]> => {
   const res = await db.query<Record<string, unknown>>('SELECT * FROM jobs WHERE status = $1 ORDER BY id DESC LIMIT $2', ['failed', limit])
@@ -135,7 +151,7 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
     return res.rows.map(rowToJob)
   }
 
-  const complete = async (id: number): Promise<void> => completeJob(db, id)
+  const complete = async (id: number, sha256?: string): Promise<void> => completeJob(db, id, sha256)
 
   const fail = async (id: number, error: string): Promise<void> => {
     const current = await db.query<{ attempts: number }>('SELECT attempts FROM jobs WHERE id = $1', [id])
@@ -216,39 +232,15 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
   }
 }
 
+/** Create a PostgreSQL-backed job queue from the configured env connection.
+ * Reuses the `poolToDb` adapter (prod: pg.Pool; tests: PGlite) so the queue and
+ * the store share one Db implementation. Migration runs lazily on first use. */
 export const createPgJobQueue = async (): Promise<JobQueue> => {
   const pool = new Pool(buildPoolConfig())
-  const db: Db = {
-    query: async <TResult extends Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: TResult[] }> => {
-      const res = await pool.query(sql, params)
-      return { rows: res.rows as TResult[] }
-    },
-    exec: async (sql: string): Promise<void> => {
-      await pool.query(sql)
-    },
-    transaction: async <T>(fn: (client: { query: Db['query'] }) => Promise<T>): Promise<T> => {
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
-        const result = await fn({
-          query: async <TResult extends Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: TResult[] }> => {
-            const res = await client.query(sql, params)
-            return { rows: res.rows as TResult[] }
-          },
-        })
-        await client.query('COMMIT')
-        return result
-      } catch (e) {
-        await client.query('ROLLBACK')
-        throw e
-      } finally {
-        client.release()
-      }
-    },
-    close: async () => {
-      await pool.end()
-    },
+  try {
+    return createJobQueueFromDb(poolToDb(pool))
+  } catch (err) {
+    await pool.end()
+    throw err
   }
-  const queue = createJobQueueFromDb(db)
-  return queue
 }

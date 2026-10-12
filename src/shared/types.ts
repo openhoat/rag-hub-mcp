@@ -132,7 +132,12 @@ export interface JobStats {
 export interface JobQueue {
   enqueue(jobs: NewJob[]): Promise<void>
   claim(limit: number): Promise<IndexJob[]>
-  complete(id: number): Promise<void>
+  /**
+   * Finish a job. When `sha256` is given and no longer matches the stored one
+   * (a scan re-enqueued a newer version while the job ran), the job is left
+   * pending for a fresh pass instead of being dropped.
+   */
+  complete(id: number, sha256?: string): Promise<void>
   fail(id: number, error: string): Promise<void>
   reclaimStale(timeoutSeconds: number): Promise<number>
   stats(): Promise<JobStats>

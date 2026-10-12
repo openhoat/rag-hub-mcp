@@ -23,22 +23,6 @@
 
 - [ ] reject/skip beyond a configurable threshold before `readFileSync`/`hashFile`
 
-### #18 [QA] Low coverage of critical code
-
-- [ ] `worker.ts` (~70%: `stop`/`drain`/error branches left, `worker.unit.test.ts` added), `postgres/job-queue.ts` (~0%), `db.ts` (~19%): poll/claim/retry/reclaimStale
-
-### #19 [TECH] Minor tech debt
-
-- [ ] Docker image: `npm prune --omit=dev` (devDeps currently bundled)
-- [ ] `chunk.ts`: metadata built twice, `headings` = last paragraph of the chunk
-- [ ] scan/worker race on `processing` jobs (lost update self-heals but is inconsistent)
-
-### #20 [TECH] `createPgJobQueue` reimplements `poolToDb` (divergent `Db` adapter)
-
-- [ ] build the queue via `poolToDb(new Pool(buildPoolConfig()))` instead of the inline `Db` object
-- [ ] fix `exec` (`splitStatements`) so `migrateSql` (2 statements) passes
-- [ ] test `job-queue` via `pgliteToDb` (same seam as the store)
-
 ## In Progress
 
 ## Done
@@ -80,5 +64,21 @@
 - [x] point `CONTEXTUAL_CHUNKING_BASE_URL`/`MODEL` at a reliable cloud endpoint instead of `ollama-laptop` (done in the infra stack `.env.op3n-cloud`)
 - [x] make `CONTEXTUAL_CHUNKING_CONCURRENCY`/`TIMEOUT_MS` explicit and tuned for the target (infra stack env)
 - [x] fast, bounded fallback to raw chunks when the context call is slow/unavailable (existing try/catch, now abort-aware)
+
+### #18 [QA] Low coverage of critical code
+
+- [x] `worker.unit.test.ts` covers `stop`/`drain`/the short paths (missing file, unknown kb, no text) and the poll-error branch; `postgres/job-queue.ts` is exercised through the `createPgliteJobQueue` seam; `db.ts` `buildPoolConfig`/`poolToDb` covered in `store.unit.test.ts`/`db.unit.test.ts`
+
+### #19 [TECH] Minor tech debt
+
+- [x] Docker image: `npm prune --omit=dev` after the build (devDeps no longer bundled)
+- [x] `chunk.ts`: metadata serialized once (dropped the double build + re-parse in `getHeadingPath`)
+- [x] scan/worker race on `processing` jobs: `complete(id, sha256)` only deletes a job that still matches the indexed hash, otherwise re-arms it `pending` so a newer enqueue is not lost
+
+### #20 [TECH] `createPgJobQueue` reimplements `poolToDb` (divergent `Db` adapter)
+
+- [x] build the queue via `poolToDb(new Pool(buildPoolConfig()))` instead of the inline `Db` object
+- [x] `exec` (`splitStatements`) handles the multi-statement `migrateSql`
+- [x] test the queue through `createPgliteJobQueue` (same `poolToDb`-shaped seam as the store)
 
 ## In Progress

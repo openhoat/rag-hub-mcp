@@ -102,10 +102,10 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
         },
       )
       if (indexed) {
-        await queue.complete(job.id)
+        await queue.complete(job.id, job.sha256)
       } else {
         logger.warn('not indexable (no text): %s/%s', job.kb, job.relPath)
-        await queue.complete(job.id)
+        await queue.complete(job.id, job.sha256)
       }
     } catch (err) {
       await handleJobError(queue, job, err)

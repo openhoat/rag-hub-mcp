@@ -122,8 +122,21 @@ const claimJobs = (db: Database.Database, limit: number): IndexJob[] => {
   return rows.map(toJob)
 }
 
-const completeJob = (db: Database.Database, id: number): void => {
-  db.prepare('DELETE FROM jobs WHERE id = ?').run(id)
+// A job is only removed when it still carries the hash that was indexed. If a
+// concurrent scan re-enqueued a newer version while the job was running, the
+// stored sha256 has changed: re-arm the job as 'pending' instead of dropping the
+// newer work (scan/worker lost update, KANBAN #19).
+const completeJob = (db: Database.Database, id: number, sha256?: string): void => {
+  if (sha256 === undefined) {
+    db.prepare('DELETE FROM jobs WHERE id = ?').run(id)
+    return
+  }
+  const res = db.prepare('DELETE FROM jobs WHERE id = ? AND sha256 = ?').run(id, sha256)
+  if (res.changes === 0) {
+    db.prepare(
+      "UPDATE jobs SET status = 'pending', started_at = NULL, progress_done = NULL, progress_total = NULL, retry_at = NULL WHERE id = ?",
+    ).run(id)
+  }
 }
 
 const failJob = (db: Database.Database, id: number, error: string): void => {
@@ -216,8 +229,8 @@ export const createSqliteJobQueue = (dbPath: string): JobQueue => {
   return {
     enqueue: jobs => enqueueJobs(db, jobs),
     claim: limit => Promise.resolve(claimJobs(db, limit)),
-    complete: id => {
-      completeJob(db, id)
+    complete: (id, sha256) => {
+      completeJob(db, id, sha256)
       return Promise.resolve()
     },
     fail: (id, error) => {
