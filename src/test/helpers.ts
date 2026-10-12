@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify'
 import { indexFile } from '../indexing/ingest.js'
 import type { ChunkRecord, JobQueue, JobStats, KbInfo, NewJob, Store, Worker } from '../shared/types'
 import type { Db } from '../storage/postgres/db.js'
+import { createJobQueueFromDb } from '../storage/postgres/job-queue.js'
 import { createPgStoreFromDb } from '../storage/postgres/store.js'
 
 /**
@@ -40,6 +41,12 @@ export const pgliteToDb = (p: PGliteInterface): Db => ({
 export const createPgliteStore = async (dimension = 4): Promise<Store> => {
   const db = new PGlite({ extensions: { vector: pgliteVector } })
   return createPgStoreFromDb(pgliteToDb(db), dimension)
+}
+
+/** Create an in-memory PostgreSQL job queue backed by PGlite. */
+export const createPgliteJobQueue = async (): Promise<JobQueue> => {
+  const db = new PGlite({ extensions: { vector: pgliteVector } })
+  return createJobQueueFromDb(pgliteToDb(db))
 }
 
 export const writeKbDocument = (root: string, kb: string, relPath: string, content: string): void => {
@@ -82,6 +89,7 @@ export const makeStubStore = (overrides: Partial<Store> = {}): Store => {
     listKnownFiles: async () => [],
     searchFts: async () => null,
     hasNullEmbeddings: async () => false,
+    countFilesWithNullEmbeddings: async () => 0,
     ...overrides,
   }
 }
@@ -98,6 +106,7 @@ export const makeStubQueue = (overrides: Partial<JobQueue> = {}): JobQueue => ({
     failed: 0,
   }),
   failedList: async (_limit?: number) => [],
+  processingList: async (_limit?: number) => [],
   retryJob: async (_id: number) => {},
   clear: async () => {},
   clearForKb: async (_kb: string) => {},
@@ -139,6 +148,7 @@ export const createSyncTestQueue = (store: Store, root: string): JobQueue => {
     reclaimStale: async () => 0,
     stats: async () => ({ pending: 0, processing: 0, failed: 0 }),
     failedList: async () => [],
+    processingList: async () => [],
     retryJob: async () => {},
     clear: async () => {},
     clearForKb: async () => {},

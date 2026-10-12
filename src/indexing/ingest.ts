@@ -16,6 +16,13 @@ const logger = getLogger('ingest')
 
 const KB_ROOT = env.KB_ROOT
 
+/** Max per-chunk embedding attempts when a batch call fails (bounded fallback). */
+const EMBED_PER_CHUNK_MAX_ATTEMPTS = 2
+/** Delay between per-chunk embedding attempts (backpressure on a struggling backend). */
+const EMBED_PER_CHUNK_RETRY_DELAY_MS = 250
+
+const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
 interface KnownFile {
   id?: number
   mtime: number
@@ -251,6 +258,7 @@ export const indexFile = async (
   fullPath: string,
   sha256: string,
   st: { mtimeMs: number; size: number },
+  signal?: AbortSignal,
 ): Promise<boolean> => {
   const { text, frontmatter } = await extractText(fullPath)
   if (!text) return false
@@ -272,25 +280,18 @@ export const indexFile = async (
       path?: string
       headings?: string
     }
-    return enrichChunkContent(c.content, {
-      path: meta.path ?? relPath,
-      headings: meta.headings ?? '',
-    })
+    return enrichChunkContent(
+      c.content,
+      {
+        path: meta.path ?? relPath,
+        headings: meta.headings ?? '',
+      },
+      undefined,
+      signal,
+    )
   })
-  let embeddings: Float32Array[] = []
-  try {
-    embeddings = await embedTexts(texts)
-  } catch (err) {
-    logger.warn('embed batch failed, retrying per-chunk', err)
-    for (let i = 0; i < texts.length; i++) {
-      try {
-        const [emb] = await embedTexts([texts[i]])
-        embeddings[i] = emb
-      } catch (perChunkErr) {
-        logger.warn('embed failed for chunk %d, storing without vector', i, perChunkErr)
-      }
-    }
-  }
+
+  const embeddings = await embedChunksBounded(texts, signal)
 
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i]
@@ -304,6 +305,39 @@ export const indexFile = async (
     })
   }
   return true
+}
+
+/**
+ * Embed a document's chunks. The batch call is tried first; when it fails, fall
+ * back to per-chunk embedding with a bounded number of attempts and a short
+ * delay, so a failing batch can never fan out into an unbounded sequence of
+ * timed-out calls. Chunks that still fail are stored without a vector (picked
+ * up later via `hasNullEmbeddings`). A job-level abort is always re-thrown.
+ */
+const embedChunksBounded = async (texts: string[], signal?: AbortSignal): Promise<Float32Array[]> => {
+  try {
+    return await embedTexts(texts, undefined, signal)
+  } catch (err) {
+    if (signal?.aborted) throw err
+    logger.warn('embed batch failed, retrying per-chunk (max %d attempts)', EMBED_PER_CHUNK_MAX_ATTEMPTS, err)
+  }
+
+  const embeddings: Float32Array[] = []
+  for (let i = 0; i < texts.length; i++) {
+    let emb: Float32Array | undefined
+    for (let attempt = 1; attempt <= EMBED_PER_CHUNK_MAX_ATTEMPTS && !emb; attempt++) {
+      try {
+        const [vector] = await embedTexts([texts[i]], undefined, signal)
+        emb = vector
+      } catch (perChunkErr) {
+        if (signal?.aborted) throw perChunkErr
+        logger.warn('embed failed for chunk %d (attempt %d/%d)', i, attempt, EMBED_PER_CHUNK_MAX_ATTEMPTS, perChunkErr)
+        if (attempt < EMBED_PER_CHUNK_MAX_ATTEMPTS) await delay(EMBED_PER_CHUNK_RETRY_DELAY_MS)
+      }
+    }
+    if (emb) embeddings[i] = emb
+  }
+  return embeddings
 }
 
 export const addDocument = async (store: Store, queue: JobQueue, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {

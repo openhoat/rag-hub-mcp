@@ -99,6 +99,14 @@ export const main = async (): Promise<void> => {
   worker.start()
   logger.info('indexer worker started')
 
+  if (env.INDEXER_JOB_TIMEOUT_MS >= env.INDEXER_STALE_TIMEOUT * 1000) {
+    logger.warn(
+      'INDEXER_JOB_TIMEOUT_MS (%dms) >= INDEXER_STALE_TIMEOUT (%ds): a still-running job may be reclaimed as stale before its own deadline. Raise INDEXER_STALE_TIMEOUT above INDEXER_JOB_TIMEOUT_MS.',
+      env.INDEXER_JOB_TIMEOUT_MS,
+      env.INDEXER_STALE_TIMEOUT,
+    )
+  }
+
   // Initial scan
   logger.info('initial scan...')
   try {

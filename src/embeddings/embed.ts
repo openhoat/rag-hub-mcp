@@ -17,13 +17,13 @@ const defaultConfig = (): EmbedConfig => {
   }
 }
 
-export const embedTexts = async (texts: string[], config: EmbedConfig = defaultConfig()): Promise<Float32Array[]> => {
+export const embedTexts = async (texts: string[], config: EmbedConfig = defaultConfig(), signal?: AbortSignal): Promise<Float32Array[]> => {
   if (texts.length === 0) return []
   const batchSize = config.batchSize ?? 16
   const result: Float32Array[] = []
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize)
-    const embeddings = await embedBatch(batch, config)
+    const embeddings = await embedBatch(batch, config, signal)
     for (const emb of embeddings) {
       result.push(new Float32Array(emb))
     }
@@ -31,7 +31,7 @@ export const embedTexts = async (texts: string[], config: EmbedConfig = defaultC
   return result
 }
 
-const embedBatch = async (texts: string[], config: EmbedConfig): Promise<number[][]> => {
+const embedBatch = async (texts: string[], config: EmbedConfig, signal?: AbortSignal): Promise<number[][]> => {
   const url = `${config.baseUrl}/embeddings`
   const body = { model: config.model, input: texts }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -42,7 +42,11 @@ const embedBatch = async (texts: string[], config: EmbedConfig): Promise<number[
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(config.timeoutMs ?? 60_000),
+    // Combine the caller's signal (job deadline) with the per-call timeout so
+    // either one aborts the request.
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(config.timeoutMs ?? 60_000)])
+      : AbortSignal.timeout(config.timeoutMs ?? 60_000),
   })
   if (!res.ok) {
     throw new Error(`embeddings API error ${res.status}`)

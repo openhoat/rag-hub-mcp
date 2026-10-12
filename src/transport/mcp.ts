@@ -238,12 +238,14 @@ const statusHandler = async (store: Store, queue: JobQueue, _args: Record<string
   const total = kbs.reduce((s, k) => s + k.chunkCount, 0)
   const totalDocs = kbs.reduce((s, k) => s + k.docCount, 0)
   const queueStats = await queue.stats()
+  const nullEmbeddings = await store.countFilesWithNullEmbeddings()
   const lines = [
     `**${kbs.length}** knowledge bases, **${totalDocs}** documents, **${total}** chunks`,
     '',
     ...kbs.map(k => `- **${k.name}**: ${k.docCount} docs, ${k.chunkCount} chunks, ${fmt(k.totalBytes)}`),
     '',
     `Indexer queue: ${queueStats.pending} pending, ${queueStats.processing} processing, ${queueStats.failed} failed`,
+    `Unsearchable documents (chunks without embedding): **${nullEmbeddings}**`,
   ]
   return { content: [{ type: 'text', text: lines.join('\n') }] }
 }
@@ -251,7 +253,16 @@ const statusHandler = async (store: Store, queue: JobQueue, _args: Record<string
 const jobsHandler = async (_store: Store, queue: JobQueue, _args: Record<string, unknown>): Promise<ToolResult> => {
   const stats = await queue.stats()
   const failed = await queue.failedList()
+  const processing = await queue.processingList()
   const lines = [`Queue: ${stats.pending} pending, ${stats.processing} processing, ${stats.failed} failed`]
+  if (processing.length > 0) {
+    const now = Date.now()
+    lines.push('', '**Processing:**')
+    for (const j of processing) {
+      const ageS = j.startedAt ? Math.round((now - j.startedAt) / 1000) : null
+      lines.push(`- **${j.kb}/${j.relPath}**: running${ageS === null ? '' : ` for ${ageS}s`} (attempt ${j.attempts})`)
+    }
+  }
   if (failed.length > 0) {
     lines.push('', '**Failed jobs:**')
     for (const j of failed) {

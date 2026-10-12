@@ -76,6 +76,8 @@ export interface Store {
   searchFts(words: string[]): Promise<FtsRow[] | null>
   /** True when the file has at least one chunk stored without an embedding. */
   hasNullEmbeddings(fileId: number): Promise<boolean>
+  /** Number of distinct files with at least one chunk stored without an embedding (indexed but unsearchable). */
+  countFilesWithNullEmbeddings(): Promise<number>
 }
 
 export interface IngestResult {
@@ -111,6 +113,10 @@ export interface IndexJob extends NewJob {
   attempts: number
   status: JobStatus
   lastError: string | null
+  /** Epoch ms when the job was claimed for processing (null when not running). */
+  startedAt?: number | null
+  /** Epoch ms before which a 'pending' job must not be claimed (retry backoff). */
+  retryAt?: number | null
 }
 
 export interface JobStats {
@@ -127,6 +133,8 @@ export interface JobQueue {
   reclaimStale(timeoutSeconds: number): Promise<number>
   stats(): Promise<JobStats>
   failedList(limit?: number): Promise<IndexJob[]>
+  /** Jobs currently being processed, oldest first (for observability). */
+  processingList(limit?: number): Promise<IndexJob[]>
   retryJob(id: number): Promise<void>
   clear(): Promise<void>
   clearForKb(kb: string): Promise<void>

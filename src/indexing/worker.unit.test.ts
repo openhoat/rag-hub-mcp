@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
+import { env } from '../shared/config.js'
 import type { IndexJob, JobQueue, Store, Worker } from '../shared/types.js'
 
 vi.mock('./ingest.js', () => ({ indexFile: vi.fn(async () => true) }))
@@ -40,6 +41,7 @@ const makeQueue = (jobs: IndexJob[]): JobQueue & { completed: number[]; failed: 
     reclaimStale: vi.fn(async () => 0),
     stats: vi.fn(async () => ({ pending: 0, processing: 0, failed: 0 })),
     failedList: vi.fn(async () => []),
+    processingList: vi.fn(async () => []),
     retryJob: vi.fn(async () => {}),
     clear: vi.fn(async () => {}),
     clearForKb: vi.fn(async () => {}),
@@ -132,6 +134,57 @@ describe('worker concurrency', () => {
       expect(queue.claim).toHaveBeenNthCalledWith(2, 1)
 
       // Release the rest so afterEach can stop the worker without hanging.
+      for (const release of releases) release()
+      await vi.advanceTimersByTimeAsync(1)
+    } finally {
+      vi.mocked(indexFile).mockImplementation(async () => true)
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('worker job deadline', () => {
+  test('should abort and fail a job that exceeds INDEXER_JOB_TIMEOUT_MS', async () => {
+    vi.useFakeTimers()
+    vi.mocked(indexFile).mockImplementation(
+      (...args: unknown[]) =>
+        new Promise<boolean>((_resolve, reject) => {
+          const signal = args[6] as AbortSignal | undefined
+          signal?.addEventListener('abort', () => reject(signal.reason))
+        }),
+    )
+    try {
+      const { queue } = start([makeJob()])
+      await vi.advanceTimersByTimeAsync(env.INDEXER_JOB_TIMEOUT_MS + 1)
+      expect(queue.failed).toHaveLength(1)
+      expect(queue.failed[0].reason).toMatch(/INDEXER_JOB_TIMEOUT_MS/)
+    } finally {
+      vi.mocked(indexFile).mockImplementation(async () => true)
+      vi.useRealTimers()
+    }
+  })
+
+  test('should not start a second execution of a job that is still in flight', async () => {
+    vi.useFakeTimers()
+    const releases: Array<() => void> = []
+    vi.mocked(indexFile).mockImplementation(
+      () =>
+        new Promise<boolean>(resolve => {
+          releases.push(() => resolve(true))
+        }),
+    )
+    try {
+      const queue = makeQueue([])
+      // A stale reclaim keeps re-claiming the same, still-running job.
+      vi.mocked(queue.claim).mockImplementation(async () => [makeJob({ id: 1 })])
+      const store = { getKbId: vi.fn(async () => 1) } as unknown as Store
+      worker = createWorker(store, queue)
+      worker.start()
+
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(indexFile).toHaveBeenCalledTimes(1)
+
       for (const release of releases) release()
       await vi.advanceTimersByTimeAsync(1)
     } finally {

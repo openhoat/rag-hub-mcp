@@ -246,6 +246,11 @@ class StoreImpl implements Store {
     const row = this.db.prepare('SELECT 1 FROM chunks WHERE file_id = ? AND embedding IS NULL LIMIT 1').get(fileId)
     return Boolean(row)
   }
+
+  countFilesWithNullEmbeddings = async (): Promise<number> => {
+    const row = this.db.prepare('SELECT COUNT(DISTINCT file_id) AS c FROM chunks WHERE embedding IS NULL').get() as { c: number }
+    return row.c
+  }
 }
 export const createSqliteStore = (dbPath: string): Store => {
   const db = new Database(dbPath)

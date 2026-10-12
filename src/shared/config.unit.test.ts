@@ -117,6 +117,28 @@ describe('config', () => {
     expect(env.CONTEXTUAL_CHUNKING_CONCURRENCY).toBe(4)
   })
 
+  test('indexer robustness defaults', async () => {
+    const { env } = await importConfig()
+    expect(env.INDEXER_JOB_TIMEOUT_MS).toBe(600_000)
+    expect(env.INDEXER_STALE_TIMEOUT).toBe(1800)
+    expect(env.INDEXER_RETRY_BASE_MS).toBe(5_000)
+    expect(env.INDEXER_RETRY_MAX_MS).toBe(300_000)
+    // Invariant the startup warning guards: a job always finishes before reclaim.
+    expect(env.INDEXER_JOB_TIMEOUT_MS).toBeLessThan(env.INDEXER_STALE_TIMEOUT * 1000)
+  })
+
+  test('coerces indexer robustness overrides', async () => {
+    process.env.INDEXER_JOB_TIMEOUT_MS = '120000'
+    process.env.INDEXER_STALE_TIMEOUT = '900'
+    process.env.INDEXER_RETRY_BASE_MS = '1000'
+    process.env.INDEXER_RETRY_MAX_MS = '60000'
+    const { env } = await importConfig()
+    expect(env.INDEXER_JOB_TIMEOUT_MS).toBe(120_000)
+    expect(env.INDEXER_STALE_TIMEOUT).toBe(900)
+    expect(env.INDEXER_RETRY_BASE_MS).toBe(1_000)
+    expect(env.INDEXER_RETRY_MAX_MS).toBe(60_000)
+  })
+
   test('coerces timeout and concurrency overrides', async () => {
     process.env.EMBEDDINGS_TIMEOUT_MS = '1000'
     process.env.CONTEXTUAL_CHUNKING_TIMEOUT_MS = '2000'

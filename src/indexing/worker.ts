@@ -10,6 +10,7 @@ const logger = getLogger('worker')
 const KB_ROOT = env.KB_ROOT
 const CONCURRENCY = env.INDEXER_CONCURRENCY
 const STALE_TIMEOUT = env.INDEXER_STALE_TIMEOUT
+const JOB_TIMEOUT_MS = env.INDEXER_JOB_TIMEOUT_MS
 
 const POLL_INTERVAL_MS = 1000
 
@@ -28,7 +29,7 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
   let running = false
   let firstPoll = true
   let pollTimer: ReturnType<typeof setTimeout> | null = null
-  const inFlight = new Set<Promise<void>>()
+  const inFlight = new Map<number, Promise<void>>()
   let drainResolve: (() => void) | null = null
 
   const poll = async (): Promise<void> => {
@@ -48,10 +49,17 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
       if (free <= 0) return
       const jobs = await queue.claim(free)
       for (const job of jobs) {
+        // Defense in depth: a stale reclaim can reset a still-running job to
+        // 'pending', so it may be claimed again. Never start a second execution
+        // of a job whose previous attempt is still in flight.
+        if (inFlight.has(job.id)) {
+          logger.warn('skipping re-claim of in-flight job %d (%s/%s)', job.id, job.kb, job.relPath)
+          continue
+        }
         const p = processJob(job)
-        inFlight.add(p)
+        inFlight.set(job.id, p)
         void p.finally(() => {
-          inFlight.delete(p)
+          if (inFlight.get(job.id) === p) inFlight.delete(job.id)
           checkDrain()
         })
       }
@@ -61,6 +69,11 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
   }
 
   const processJob = async (job: IndexJob): Promise<void> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      controller.abort(new Error(`job ${job.id} exceeded INDEXER_JOB_TIMEOUT_MS (${JOB_TIMEOUT_MS}ms)`))
+    }, JOB_TIMEOUT_MS)
+    timer.unref?.()
     try {
       const fullPath = sanitizeRelativePath(KB_ROOT, job.kb, job.relPath)
       if (!existsSync(fullPath)) {
@@ -72,10 +85,18 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
         await queue.complete(job.id)
         return
       }
-      const indexed = await indexFile(store, kbId, job.relPath, fullPath, job.sha256, {
-        mtimeMs: job.mtime,
-        size: job.bytes,
-      })
+      const indexed = await indexFile(
+        store,
+        kbId,
+        job.relPath,
+        fullPath,
+        job.sha256,
+        {
+          mtimeMs: job.mtime,
+          size: job.bytes,
+        },
+        controller.signal,
+      )
       if (indexed) {
         await queue.complete(job.id)
       } else {
@@ -84,6 +105,8 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
       }
     } catch (err) {
       await handleJobError(queue, job, err)
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -116,7 +139,7 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
       pollTimer = null
     }
     if (inFlight.size > 0) {
-      await Promise.allSettled(Array.from(inFlight))
+      await Promise.allSettled(Array.from(inFlight.values()))
     }
     logger.info('worker stopped')
   }
