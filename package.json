@@ -1,6 +1,6 @@
 {
   "name": "@headwood/rag-hub-mcp",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "RAG Hub MCP — knowledge bases by folder, exposed via MCP + REST. Uses Ollama/Bifrost/OpenAI-compatible embeddings + SQLite/FTS5.",
   "keywords": [
     "mcp",
