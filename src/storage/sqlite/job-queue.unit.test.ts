@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { env } from '../../shared/config.js'
 import { createSqliteJobQueue } from './job-queue.js'
 
 let dbPath: string
@@ -117,6 +118,57 @@ describe('SqliteJobQueue', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test('fail schedules a backoff before the job can be re-claimed', async () => {
+    vi.useFakeTimers()
+    try {
+      const base = 1_700_000_000_000
+      vi.setSystemTime(base)
+      await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
+      const [job] = await queue.claim(1)
+      await queue.fail(job.id, 'boom')
+      // Not claimable yet: retry_at is in the future.
+      expect(await queue.claim(1)).toHaveLength(0)
+      // After the base backoff elapses, the job becomes claimable again.
+      vi.setSystemTime(base + env.INDEXER_RETRY_BASE_MS + 1)
+      const reclaimed = await queue.claim(1)
+      expect(reclaimed).toHaveLength(1)
+      expect(reclaimed[0].id).toBe(job.id)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('reclaimStale counts as an attempt and parks a job that never completes', async () => {
+    vi.useFakeTimers()
+    try {
+      const base = 1_700_000_000_000
+      vi.setSystemTime(base)
+      await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
+      await queue.claim(1)
+      for (let i = 1; i <= 3; i++) {
+        vi.setSystemTime(base + i * 60_000)
+        expect(await queue.reclaimStale(30)).toBe(1)
+        if (i < 3) await queue.claim(1)
+      }
+      const s = await queue.stats()
+      expect(s.failed).toBe(1)
+      expect(s.processing).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('processingList returns the in-flight jobs', async () => {
+    await queue.enqueue([
+      { kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 },
+      { kb: 'kb2', relPath: 'b.md', op: 'index', sha256: 'def', mtime: 2, bytes: 200 },
+    ])
+    await queue.claim(2)
+    const processing = await queue.processingList()
+    expect(processing).toHaveLength(2)
+    expect(processing.every(j => j.status === 'processing')).toBe(true)
   })
 
   test('enqueue idempotency: re-enqueue resets failed', async () => {

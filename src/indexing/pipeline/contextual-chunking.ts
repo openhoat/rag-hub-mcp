@@ -36,10 +36,11 @@ export const enrichChunkContent = async (
   content: string,
   context?: ChunkContext,
   config: ContextualChunkingConfig = defaultConfig(),
+  signal?: AbortSignal,
 ): Promise<string> => {
   if (!config.enabled) return content
   try {
-    const sentence = await generateContext(content, context, config)
+    const sentence = await generateContext(content, context, config, signal)
     return sentence ? `${sentence}\n${content}` : content
   } catch (err) {
     logger.warn('contextual chunking failed, embedding raw chunk', err)
@@ -58,7 +59,12 @@ const buildDocContext = (context: ChunkContext | undefined): string => {
   return path + headings
 }
 
-const generateContext = async (content: string, context: ChunkContext | undefined, config: ContextualChunkingConfig): Promise<string> => {
+const generateContext = async (
+  content: string,
+  context: ChunkContext | undefined,
+  config: ContextualChunkingConfig,
+  signal?: AbortSignal,
+): Promise<string> => {
   const url = `${config.baseUrl}/chat/completions`
   const docContext = buildDocContext(context)
   const body = {
@@ -79,7 +85,10 @@ const generateContext = async (content: string, context: ChunkContext | undefine
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(config.timeoutMs ?? 60_000),
+    // Combine the job deadline signal with the per-call timeout when provided.
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(config.timeoutMs ?? 60_000)])
+      : AbortSignal.timeout(config.timeoutMs ?? 60_000),
   })
   if (!res.ok) throw new Error(`chat completions error ${res.status}`)
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }

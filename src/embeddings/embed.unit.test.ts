@@ -85,4 +85,18 @@ describe('embedTexts', () => {
     })
     await expect(embedTexts(['x'], { baseUrl: 'http://e/v1', model: 'm', timeoutMs: 5 })).rejects.toThrow()
   })
+
+  test('should abort the request when the caller signal aborts', async () => {
+    const controller = new AbortController()
+    vi.stubGlobal(
+      'fetch',
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(init.signal.reason))
+        }),
+    )
+    const promise = embedTexts(['x'], { baseUrl: 'http://e/v1', model: 'm', timeoutMs: 60_000 }, controller.signal)
+    controller.abort(new Error('job deadline'))
+    await expect(promise).rejects.toThrow('job deadline')
+  })
 })

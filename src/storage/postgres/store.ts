@@ -310,6 +310,11 @@ export class PgStore implements Store {
     return rows.length > 0
   }
 
+  countFilesWithNullEmbeddings = async (): Promise<number> => {
+    const { rows } = await this.query('SELECT COUNT(DISTINCT file_id)::int AS c FROM chunks WHERE embedding IS NULL')
+    return toNum(rows[0]?.c)
+  }
+
   private readonly toChunk = (r: PgRow): ChunkRecord => {
     return {
       id: toNum(r.id),

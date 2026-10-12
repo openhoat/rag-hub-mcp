@@ -183,14 +183,16 @@ export const createRestApp = async (store: Store, queue: JobQueue) => {
     if (!auth(req, reply)) return
     const kbs = await store.listKbs()
     const queueStats = await queue.stats()
-    void reply.send({ kbs, indexer: queueStats })
+    const nullEmbeddings = await store.countFilesWithNullEmbeddings()
+    void reply.send({ kbs, indexer: queueStats, unsearchableDocuments: nullEmbeddings })
   })
 
   app.get('/admin/jobs', async (req, reply) => {
     if (!auth(req, reply)) return
     const stats = await queue.stats()
     const failed = await queue.failedList()
-    void reply.send({ stats, failed })
+    const processing = await queue.processingList()
+    void reply.send({ stats, processing, failed })
   })
 
   app.post<{ Params: { id: string } }>('/admin/jobs/:id/retry', async (req, reply) => {

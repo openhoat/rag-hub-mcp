@@ -1,8 +1,11 @@
 import Database from 'better-sqlite3'
+import { retryBackoffMs } from '../../shared/backoff.js'
 import { env } from '../../shared/config.js'
 import type { IndexJob, JobQueue, JobStats, NewJob } from '../../shared/types.js'
 
 const RETRY_MAX = env.INDEXER_RETRY_MAX
+const RETRY_BASE_MS = env.INDEXER_RETRY_BASE_MS
+const RETRY_MAX_MS = env.INDEXER_RETRY_MAX_MS
 
 const migrate = (db: Database.Database): void => {
   db.exec(`
@@ -18,10 +21,16 @@ const migrate = (db: Database.Database): void => {
       attempts INTEGER NOT NULL DEFAULT 0,
       last_error TEXT,
       started_at INTEGER,
+      retry_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
       UNIQUE(kb, rel_path, op)
     )
   `)
+  // Existing databases created before retry_at existed: add the column idempotently.
+  const columns = (db.prepare('PRAGMA table_info(jobs)').all() as { name: string }[]).map(c => c.name)
+  if (!columns.includes('retry_at')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN retry_at INTEGER')
+  }
   db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)')
 }
 
@@ -37,6 +46,8 @@ const toJob = (r: unknown): IndexJob => {
     status: string
     attempts: number
     last_error: string | null
+    started_at: number | null
+    retry_at: number | null
   }
   return {
     id: row.id,
@@ -49,6 +60,8 @@ const toJob = (r: unknown): IndexJob => {
     status: row.status as IndexJob['status'],
     attempts: row.attempts,
     lastError: row.last_error,
+    startedAt: row.started_at ?? null,
+    retryAt: row.retry_at ?? null,
   }
 }
 
@@ -68,6 +81,10 @@ const enqueueJobs = (db: Database.Database, jobs: NewJob[]): Promise<void> => {
         WHEN jobs.status = 'failed' THEN 0
         ELSE jobs.attempts
       END,
+      retry_at = CASE
+        WHEN jobs.status = 'failed' THEN NULL
+        ELSE jobs.retry_at
+      END,
       last_error = NULL
   `)
   const txn = db.transaction(() => {
@@ -80,8 +97,10 @@ const enqueueJobs = (db: Database.Database, jobs: NewJob[]): Promise<void> => {
 }
 
 const claimJobs = (db: Database.Database, limit: number): IndexJob[] => {
-  const rows = db.prepare('SELECT * FROM jobs WHERE status = ? ORDER BY id LIMIT ?').all('pending', limit) as unknown[]
   const now = Date.now()
+  const rows = db
+    .prepare("SELECT * FROM jobs WHERE status = 'pending' AND (retry_at IS NULL OR retry_at <= ?) ORDER BY id LIMIT ?")
+    .all(now, limit) as unknown[]
   const update = db.prepare('UPDATE jobs SET status = ?, started_at = ? WHERE id = ?')
   for (const row of rows) {
     const r = row as { id: number; status: string }
@@ -96,22 +115,35 @@ const completeJob = (db: Database.Database, id: number): void => {
 }
 
 const failJob = (db: Database.Database, id: number, error: string): void => {
-  db.prepare(
-    `UPDATE jobs
-     SET attempts = attempts + 1,
-         last_error = ?,
-         status = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE 'pending' END,
-         started_at = NULL
-     WHERE id = ?`,
-  ).run(error, RETRY_MAX, id)
+  const row = db.prepare('SELECT attempts FROM jobs WHERE id = ?').get(id) as { attempts: number } | undefined
+  const attempts = (row?.attempts ?? 0) + 1
+  const parked = attempts >= RETRY_MAX
+  const retryAt = parked ? null : Date.now() + retryBackoffMs(attempts, RETRY_BASE_MS, RETRY_MAX_MS)
+  db.prepare('UPDATE jobs SET attempts = ?, last_error = ?, status = ?, retry_at = ?, started_at = NULL WHERE id = ?').run(
+    attempts,
+    error,
+    parked ? 'failed' : 'pending',
+    retryAt,
+    id,
+  )
 }
 
 const reclaimStaleJobs = (db: Database.Database, timeoutSeconds: number): number => {
   const cutoff = Date.now() - timeoutSeconds * 1000
-  const r = db
-    .prepare('UPDATE jobs SET status = ?, started_at = NULL WHERE status = ? AND started_at < ?')
-    .run('pending', 'processing', cutoff)
-  return r.changes
+  const rows = db.prepare("SELECT id, attempts FROM jobs WHERE status = 'processing' AND started_at < ?").all(cutoff) as {
+    id: number
+    attempts: number
+  }[]
+  // Reclaiming is counted as an attempt so a job that never completes cannot
+  // loop forever between reclaim and claim without ever reaching 'failed'.
+  const update = db.prepare('UPDATE jobs SET status = ?, attempts = ?, last_error = ?, retry_at = ?, started_at = NULL WHERE id = ?')
+  const now = Date.now()
+  for (const r of rows) {
+    const attempts = r.attempts + 1
+    const parked = attempts >= RETRY_MAX
+    update.run(parked ? 'failed' : 'pending', attempts, 'reclaimed (stale)', parked ? null : now, r.id)
+  }
+  return rows.length
 }
 
 const jobStats = (db: Database.Database): JobStats => {
@@ -132,8 +164,18 @@ const failedJobs = (db: Database.Database, limit = 20): IndexJob[] => {
   return rows.map(toJob)
 }
 
+const processingJobs = (db: Database.Database, limit = 50): IndexJob[] => {
+  const rows = db.prepare('SELECT * FROM jobs WHERE status = ? ORDER BY started_at LIMIT ?').all('processing', limit) as unknown[]
+  return rows.map(toJob)
+}
+
 const retryJobById = (db: Database.Database, id: number): void => {
-  db.prepare('UPDATE jobs SET status = ?, attempts = ?, last_error = NULL WHERE id = ? AND status = ?').run('pending', 0, id, 'failed')
+  db.prepare('UPDATE jobs SET status = ?, attempts = ?, retry_at = NULL, last_error = NULL WHERE id = ? AND status = ?').run(
+    'pending',
+    0,
+    id,
+    'failed',
+  )
 }
 
 const clearAllJobs = (db: Database.Database): void => {
@@ -171,6 +213,7 @@ export const createSqliteJobQueue = (dbPath: string): JobQueue => {
     reclaimStale: timeout => Promise.resolve(reclaimStaleJobs(db, timeout)),
     stats: () => Promise.resolve(jobStats(db)),
     failedList: limit => Promise.resolve(failedJobs(db, limit)),
+    processingList: limit => Promise.resolve(processingJobs(db, limit)),
     retryJob: id => {
       retryJobById(db, id)
       return Promise.resolve()

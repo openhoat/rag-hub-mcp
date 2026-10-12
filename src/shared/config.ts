@@ -52,7 +52,18 @@ const EnvSchema = z.object({
   VERSION: z.string().default(packageVersion),
   INDEXER_CONCURRENCY: z.coerce.number().int().min(1).default(4),
   INDEXER_RETRY_MAX: z.coerce.number().int().min(0).default(3),
-  INDEXER_STALE_TIMEOUT: z.coerce.number().int().min(1).default(300),
+  // A job still 'processing' after this delay is considered orphaned (crashed
+  // worker) and reclaimed. Kept well above INDEXER_JOB_TIMEOUT_MS so a slow but
+  // live job always finishes (success or abort) before it is reclaimed.
+  INDEXER_STALE_TIMEOUT: z.coerce.number().int().min(1).default(1800),
+  // Hard wall-clock deadline for a single job. On expiry the job is aborted
+  // (signal propagated to embeddings/contextual-chunking fetches) and failed,
+  // instead of spinning forever on a slow downstream service.
+  INDEXER_JOB_TIMEOUT_MS: z.coerce.number().int().min(1).default(600_000),
+  // Exponential backoff applied between indexer retries: base * 2^(attempts-1),
+  // capped at INDEXER_RETRY_MAX_MS.
+  INDEXER_RETRY_BASE_MS: z.coerce.number().int().min(0).default(5_000),
+  INDEXER_RETRY_MAX_MS: z.coerce.number().int().min(0).default(300_000),
   RAG_TRANSPORT: z.enum(['stdio', 'http']).optional(),
   LOG_LEVEL: z.string().default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),

@@ -50,6 +50,7 @@ const makeStubQueue = (): JobQueue & {
     reclaimStale: vi.fn(async () => 0),
     stats: vi.fn(async () => ({ pending: 0, processing: 0, failed: 0 })),
     failedList: vi.fn(async () => []),
+    processingList: vi.fn(async () => []),
     retryJob: vi.fn(async () => {}),
     clear: vi.fn(async () => {}),
     clearForKb: vi.fn(async (kb: string) => {
@@ -109,6 +110,35 @@ describe('indexFile', () => {
     const chunks = await store.getAllChunks('docs')
     expect(chunks.length).toBeGreaterThan(1)
     expect(chunks.some(c => c.embedding !== null)).toBe(true)
+  })
+
+  test('should bound the per-chunk embedding fallback when every call fails', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), 'unused', 'utf-8')
+    await store.addKb('docs')
+    const kbId = (await store.getKbId('docs')) as number
+
+    const paragraph = 'para content filler '.repeat(150)
+    vi.mocked(extractText).mockImplementationOnce(async () => ({
+      text: Array.from({ length: 3 }, () => paragraph).join('\n\n'),
+      frontmatter: null,
+    }))
+    vi.mocked(embedTexts).mockImplementation(async () => {
+      throw new Error('embeddings API error 500')
+    })
+
+    await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', {
+      mtimeMs: 0,
+      size: 40,
+    })
+
+    const chunks = await store.getAllChunks('docs')
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.every(c => c.embedding === null)).toBe(true)
+    // 1 batch attempt + at most 2 attempts per chunk — never unbounded.
+    expect(vi.mocked(embedTexts).mock.calls.length).toBeLessThanOrEqual(1 + chunks.length * 2)
   })
 
   test('should enrich chunk content via contextual chunking before embedding', async () => {
