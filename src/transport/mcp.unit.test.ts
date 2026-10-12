@@ -204,6 +204,47 @@ describe('handleToolCall', () => {
     })
   })
 
+  test('should report processing job progress', async () => {
+    const queue = makeStubQueue({
+      stats: async () => ({ pending: 0, processing: 2, failed: 0 }),
+      processingList: async () => [
+        {
+          id: 1,
+          kb: 'kb',
+          relPath: 'big.md',
+          op: 'index',
+          sha256: 's',
+          mtime: 0,
+          bytes: 1,
+          attempts: 0,
+          status: 'processing',
+          lastError: null,
+          startedAt: Date.now() - 5000,
+          progressDone: 3,
+          progressTotal: 10,
+        },
+        {
+          id: 2,
+          kb: 'kb',
+          relPath: 'cold.md',
+          op: 'index',
+          sha256: 's',
+          mtime: 0,
+          bytes: 1,
+          attempts: 0,
+          status: 'processing',
+          lastError: null,
+          startedAt: null,
+          progressDone: null,
+          progressTotal: null,
+        },
+      ],
+    })
+    const result = await handleToolCall(store(), queue, 'rag_jobs', {})
+    expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('3/10 chunks') })
+    expect(result.content?.[0]).toEqual({ type: 'text', text: expect.stringContaining('starting…') })
+  })
+
   test('should return unknown tool error', async () => {
     const result = await handleToolCall(store(), q, 'rag_unknown', {})
     expect(result.isError).toBe(true)

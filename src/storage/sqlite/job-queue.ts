@@ -22,14 +22,22 @@ const migrate = (db: Database.Database): void => {
       last_error TEXT,
       started_at INTEGER,
       retry_at INTEGER,
+      progress_done INTEGER,
+      progress_total INTEGER,
       created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
       UNIQUE(kb, rel_path, op)
     )
   `)
-  // Existing databases created before retry_at existed: add the column idempotently.
+  // Existing databases created before these columns existed: add them idempotently.
   const columns = (db.prepare('PRAGMA table_info(jobs)').all() as { name: string }[]).map(c => c.name)
   if (!columns.includes('retry_at')) {
     db.exec('ALTER TABLE jobs ADD COLUMN retry_at INTEGER')
+  }
+  if (!columns.includes('progress_done')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN progress_done INTEGER')
+  }
+  if (!columns.includes('progress_total')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN progress_total INTEGER')
   }
   db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)')
 }
@@ -48,6 +56,8 @@ const toJob = (r: unknown): IndexJob => {
     last_error: string | null
     started_at: number | null
     retry_at: number | null
+    progress_done: number | null
+    progress_total: number | null
   }
   return {
     id: row.id,
@@ -62,6 +72,8 @@ const toJob = (r: unknown): IndexJob => {
     lastError: row.last_error,
     startedAt: row.started_at ?? null,
     retryAt: row.retry_at ?? null,
+    progressDone: row.progress_done ?? null,
+    progressTotal: row.progress_total ?? null,
   }
 }
 
@@ -101,7 +113,7 @@ const claimJobs = (db: Database.Database, limit: number): IndexJob[] => {
   const rows = db
     .prepare("SELECT * FROM jobs WHERE status = 'pending' AND (retry_at IS NULL OR retry_at <= ?) ORDER BY id LIMIT ?")
     .all(now, limit) as unknown[]
-  const update = db.prepare('UPDATE jobs SET status = ?, started_at = ? WHERE id = ?')
+  const update = db.prepare('UPDATE jobs SET status = ?, started_at = ?, progress_done = NULL, progress_total = NULL WHERE id = ?')
   for (const row of rows) {
     const r = row as { id: number; status: string }
     update.run('processing', now, r.id)
@@ -119,13 +131,9 @@ const failJob = (db: Database.Database, id: number, error: string): void => {
   const attempts = (row?.attempts ?? 0) + 1
   const parked = attempts >= RETRY_MAX
   const retryAt = parked ? null : Date.now() + retryBackoffMs(attempts, RETRY_BASE_MS, RETRY_MAX_MS)
-  db.prepare('UPDATE jobs SET attempts = ?, last_error = ?, status = ?, retry_at = ?, started_at = NULL WHERE id = ?').run(
-    attempts,
-    error,
-    parked ? 'failed' : 'pending',
-    retryAt,
-    id,
-  )
+  db.prepare(
+    'UPDATE jobs SET attempts = ?, last_error = ?, status = ?, retry_at = ?, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = ?',
+  ).run(attempts, error, parked ? 'failed' : 'pending', retryAt, id)
 }
 
 const reclaimStaleJobs = (db: Database.Database, timeoutSeconds: number): number => {
@@ -136,7 +144,9 @@ const reclaimStaleJobs = (db: Database.Database, timeoutSeconds: number): number
   }[]
   // Reclaiming is counted as an attempt so a job that never completes cannot
   // loop forever between reclaim and claim without ever reaching 'failed'.
-  const update = db.prepare('UPDATE jobs SET status = ?, attempts = ?, last_error = ?, retry_at = ?, started_at = NULL WHERE id = ?')
+  const update = db.prepare(
+    'UPDATE jobs SET status = ?, attempts = ?, last_error = ?, retry_at = ?, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = ?',
+  )
   const now = Date.now()
   for (const r of rows) {
     const attempts = r.attempts + 1
@@ -167,6 +177,10 @@ const failedJobs = (db: Database.Database, limit = 20): IndexJob[] => {
 const processingJobs = (db: Database.Database, limit = 50): IndexJob[] => {
   const rows = db.prepare('SELECT * FROM jobs WHERE status = ? ORDER BY started_at LIMIT ?').all('processing', limit) as unknown[]
   return rows.map(toJob)
+}
+
+const setProgress = (db: Database.Database, id: number, done: number, total: number): void => {
+  db.prepare('UPDATE jobs SET progress_done = ?, progress_total = ? WHERE id = ?').run(done, total, id)
 }
 
 const retryJobById = (db: Database.Database, id: number): void => {
@@ -214,6 +228,10 @@ export const createSqliteJobQueue = (dbPath: string): JobQueue => {
     stats: () => Promise.resolve(jobStats(db)),
     failedList: limit => Promise.resolve(failedJobs(db, limit)),
     processingList: limit => Promise.resolve(processingJobs(db, limit)),
+    progress: (id, done, total) => {
+      setProgress(db, id, done, total)
+      return Promise.resolve()
+    },
     retryJob: id => {
       retryJobById(db, id)
       return Promise.resolve()

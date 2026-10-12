@@ -171,6 +171,28 @@ describe('SqliteJobQueue', () => {
     expect(processing.every(j => j.status === 'processing')).toBe(true)
   })
 
+  test('progress is recorded and cleared on a fresh claim', async () => {
+    vi.useFakeTimers()
+    try {
+      const base = 1_700_000_000_000
+      vi.setSystemTime(base)
+      await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
+      const [job] = await queue.claim(1)
+      await queue.progress(job.id, 3, 10)
+      const [running] = await queue.processingList()
+      expect(running.progressDone).toBe(3)
+      expect(running.progressTotal).toBe(10)
+
+      await queue.fail(job.id, 'boom')
+      vi.setSystemTime(base + env.INDEXER_RETRY_BASE_MS + 1)
+      const [reclaimed] = await queue.claim(1)
+      expect(reclaimed.progressDone).toBeNull()
+      expect(reclaimed.progressTotal).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('enqueue idempotency: re-enqueue resets failed', async () => {
     await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
     const [job] = await queue.claim(1)

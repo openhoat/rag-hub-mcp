@@ -63,4 +63,13 @@ describe('pgJobQueue (e2e, in-memory PGlite)', () => {
     expect(await queue.reclaimStale(0)).toBeGreaterThanOrEqual(1)
     expect((await queue.stats()).processing).toBe(0)
   })
+
+  test('should expose indexing progress of a running job', async () => {
+    await queue.enqueue([newJob({ relPath: 'progress.md' })])
+    const [job] = await queue.claim(1)
+    await queue.progress(job.id, 2, 7)
+    const [running] = await queue.processingList()
+    expect(running.progressDone).toBe(2)
+    expect(running.progressTotal).toBe(7)
+  })
 })

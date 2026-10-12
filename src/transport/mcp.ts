@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { addDocument, deleteDocument, deleteKb, forceReindex, readDocument, scanAll } from '../indexing/ingest.js'
 import { search } from '../search/search.js'
 import { env } from '../shared/config.js'
-import type { JobQueue, Store } from '../shared/types.js'
+import type { IndexJob, JobQueue, Store } from '../shared/types.js'
 
 type ToolResult = {
   content: { type: 'text'; text: string }[]
@@ -233,12 +233,18 @@ const reindexHandler = async (store: Store, queue: JobQueue, args: Record<string
   }
 }
 
+const progressLabel = (job: IndexJob): string => {
+  if (job.progressTotal == null) return 'starting…'
+  return `${job.progressDone ?? 0}/${job.progressTotal} chunks`
+}
+
 const statusHandler = async (store: Store, queue: JobQueue, _args: Record<string, unknown>): Promise<ToolResult> => {
   const kbs = await store.listKbs()
   const total = kbs.reduce((s, k) => s + k.chunkCount, 0)
   const totalDocs = kbs.reduce((s, k) => s + k.docCount, 0)
   const queueStats = await queue.stats()
   const nullEmbeddings = await store.countFilesWithNullEmbeddings()
+  const processing = await queue.processingList()
   const lines = [
     `**${kbs.length}** knowledge bases, **${totalDocs}** documents, **${total}** chunks`,
     '',
@@ -247,6 +253,12 @@ const statusHandler = async (store: Store, queue: JobQueue, _args: Record<string
     `Indexer queue: ${queueStats.pending} pending, ${queueStats.processing} processing, ${queueStats.failed} failed`,
     `Unsearchable documents (chunks without embedding): **${nullEmbeddings}**`,
   ]
+  if (processing.length > 0) {
+    lines.push('', '**Processing:**')
+    for (const j of processing) {
+      lines.push(`- **${j.kb}/${j.relPath}**: ${progressLabel(j)}`)
+    }
+  }
   return { content: [{ type: 'text', text: lines.join('\n') }] }
 }
 
@@ -260,7 +272,7 @@ const jobsHandler = async (_store: Store, queue: JobQueue, _args: Record<string,
     lines.push('', '**Processing:**')
     for (const j of processing) {
       const ageS = j.startedAt ? Math.round((now - j.startedAt) / 1000) : null
-      lines.push(`- **${j.kb}/${j.relPath}**: running${ageS === null ? '' : ` for ${ageS}s`} (attempt ${j.attempts})`)
+      lines.push(`- **${j.kb}/${j.relPath}**: ${progressLabel(j)}${ageS === null ? '' : ` (${ageS}s)`}, attempt ${j.attempts}`)
     }
   }
   if (failed.length > 0) {

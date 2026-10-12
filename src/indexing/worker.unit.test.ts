@@ -42,6 +42,7 @@ const makeQueue = (jobs: IndexJob[]): JobQueue & { completed: number[]; failed: 
     stats: vi.fn(async () => ({ pending: 0, processing: 0, failed: 0 })),
     failedList: vi.fn(async () => []),
     processingList: vi.fn(async () => []),
+    progress: vi.fn(async () => {}),
     retryJob: vi.fn(async () => {}),
     clear: vi.fn(async () => {}),
     clearForKb: vi.fn(async () => {}),
@@ -190,6 +191,23 @@ describe('worker job deadline', () => {
     } finally {
       vi.mocked(indexFile).mockImplementation(async () => true)
       vi.useRealTimers()
+    }
+  })
+})
+
+describe('worker progress', () => {
+  test('should forward index progress to the queue', async () => {
+    vi.mocked(indexFile).mockImplementation(async (...args: unknown[]) => {
+      const onProgress = args[7] as ((done: number, total: number) => void) | undefined
+      onProgress?.(1, 3)
+      return true
+    })
+    try {
+      const { queue } = start([makeJob({ id: 7 })])
+      await vi.waitFor(() => expect(queue.completed).toContain(7))
+      expect(queue.progress).toHaveBeenCalledWith(7, 1, 3)
+    } finally {
+      vi.mocked(indexFile).mockImplementation(async () => true)
     }
   })
 })

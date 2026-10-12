@@ -51,6 +51,7 @@ const makeStubQueue = (): JobQueue & {
     stats: vi.fn(async () => ({ pending: 0, processing: 0, failed: 0 })),
     failedList: vi.fn(async () => []),
     processingList: vi.fn(async () => []),
+    progress: vi.fn(async () => {}),
     retryJob: vi.fn(async () => {}),
     clear: vi.fn(async () => {}),
     clearForKb: vi.fn(async (kb: string) => {
@@ -139,6 +140,31 @@ describe('indexFile', () => {
     expect(chunks.every(c => c.embedding === null)).toBe(true)
     // 1 batch attempt + at most 2 attempts per chunk — never unbounded.
     expect(vi.mocked(embedTexts).mock.calls.length).toBeLessThanOrEqual(1 + chunks.length * 2)
+  })
+
+  test('reports chunk progress through the onProgress callback', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    writeFileSync(join(root, 'docs', 'a.md'), 'unused', 'utf-8')
+    await store.addKb('docs')
+    const kbId = (await store.getKbId('docs')) as number
+
+    const paragraph = 'para content filler '.repeat(150)
+    vi.mocked(extractText).mockImplementationOnce(async () => ({
+      text: Array.from({ length: 3 }, () => paragraph).join('\n\n'),
+      frontmatter: null,
+    }))
+
+    const seen: Array<[number, number]> = []
+    await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', { mtimeMs: 0, size: 40 }, undefined, (done, total) =>
+      seen.push([done, total]),
+    )
+
+    const chunks = await store.getAllChunks('docs')
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(seen[0]).toEqual([0, chunks.length])
+    expect(seen[seen.length - 1]).toEqual([chunks.length, chunks.length])
   })
 
   test('should enrich chunk content via contextual chunking before embedding', async () => {
