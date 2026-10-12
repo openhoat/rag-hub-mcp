@@ -211,3 +211,132 @@ describe('worker progress', () => {
     }
   })
 })
+
+const POLL_INTERVAL_MS = 1000
+
+describe('worker edge paths', () => {
+  test('should complete a job whose file no longer exists', async () => {
+    const { queue } = start([makeJob({ relPath: 'gone.md' })])
+    await vi.waitFor(() => expect(queue.completed).toContain(1))
+    expect(indexFile).not.toHaveBeenCalled()
+    expect(queue.failed).toHaveLength(0)
+  })
+
+  test('should complete a job whose knowledge base is unknown', async () => {
+    const queue = makeQueue([makeJob()])
+    const store = { getKbId: vi.fn(async () => undefined) } as unknown as Store
+    worker = createWorker(store, queue)
+    worker.start()
+    await vi.waitFor(() => expect(queue.completed).toContain(1))
+    expect(indexFile).not.toHaveBeenCalled()
+  })
+
+  test('should complete (not fail) a file that yields no text', async () => {
+    vi.mocked(indexFile).mockResolvedValueOnce(false)
+    const { queue } = start([makeJob()])
+    await vi.waitFor(() => expect(queue.completed).toContain(1))
+    expect(queue.failed).toHaveLength(0)
+  })
+
+  test('should park a job as failed once retries are exhausted', async () => {
+    vi.mocked(indexFile).mockRejectedValueOnce(new Error('boom'))
+    const { queue } = start([makeJob({ id: 5, attempts: env.INDEXER_RETRY_MAX })])
+    await vi.waitFor(() => expect(queue.failed).toHaveLength(1))
+    expect(queue.failed[0]).toEqual({ id: 5, reason: 'boom' })
+  })
+
+  test('should survive and log a queue error during poll', async () => {
+    vi.useFakeTimers()
+    try {
+      const queue = makeQueue([])
+      vi.mocked(queue.claim).mockRejectedValueOnce(new Error('db down'))
+      const store = { getKbId: vi.fn(async () => 1) } as unknown as Store
+      worker = createWorker(store, queue)
+      worker.start()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(queue.claim).toHaveBeenCalledTimes(1)
+      // The loop keeps polling after the failure.
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      expect(vi.mocked(queue.claim).mock.calls.length).toBeGreaterThanOrEqual(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('should ignore a second start call', async () => {
+    const { queue } = start([makeJob()])
+    await vi.waitFor(() => expect(queue.reclaimStale).toHaveBeenCalledWith(0))
+    worker?.start()
+    expect(vi.mocked(queue.reclaimStale).mock.calls.filter(c => c[0] === 0)).toHaveLength(1)
+  })
+})
+
+describe('worker drain', () => {
+  test('should return immediately when nothing is pending or in flight', async () => {
+    const queue = makeQueue([])
+    const store = { getKbId: vi.fn(async () => 1) } as unknown as Store
+    worker = createWorker(store, queue)
+    await expect(worker.drain()).resolves.toBeUndefined()
+  })
+
+  test('should wait for pending jobs when nothing is in flight', async () => {
+    vi.useFakeTimers()
+    try {
+      const queue = makeQueue([])
+      vi.mocked(queue.stats)
+        .mockResolvedValueOnce({ pending: 1, processing: 0, failed: 0 })
+        .mockResolvedValueOnce({ pending: 0, processing: 0, failed: 0 })
+      const store = { getKbId: vi.fn(async () => 1) } as unknown as Store
+      worker = createWorker(store, queue)
+      const drained = worker.drain()
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 1)
+      await expect(drained).resolves.toBeUndefined()
+      expect(queue.stats).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('should resolve when in-flight jobs complete', async () => {
+    const releases: Array<() => void> = []
+    vi.mocked(indexFile).mockImplementation(
+      () =>
+        new Promise<boolean>(resolve => {
+          releases.push(() => resolve(true))
+        }),
+    )
+    try {
+      const { queue } = start([makeJob({ id: 1 })])
+      await vi.waitFor(() => expect(indexFile).toHaveBeenCalled())
+      let drained = false
+      const done = worker?.drain().then(() => {
+        drained = true
+      })
+      expect(drained).toBe(false)
+      for (const release of releases) release()
+      await done
+      expect(drained).toBe(true)
+      expect(queue.completed).toContain(1)
+    } finally {
+      vi.mocked(indexFile).mockImplementation(async () => true)
+    }
+  })
+})
+
+describe('worker complete', () => {
+  test('should pass the job hash to complete so a superseded job is re-armed', async () => {
+    const queue = makeQueue([])
+    vi.mocked(queue.claim).mockResolvedValueOnce([makeJob({ id: 3, sha256: 'h3' })])
+    const store = { getKbId: vi.fn(async () => 1) } as unknown as Store
+    worker = createWorker(store, queue)
+    worker.start()
+    await vi.waitFor(() => expect(queue.completed).toContain(3))
+    expect(queue.complete).toHaveBeenCalledWith(3, 'h3')
+  })
+
+  test('should complete without a hash when the file is gone', async () => {
+    const { queue } = start([makeJob({ id: 9, relPath: 'gone.md' })])
+    await vi.waitFor(() => expect(queue.completed).toContain(9))
+    expect(queue.complete).toHaveBeenCalledWith(9)
+  })
+})

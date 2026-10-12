@@ -20,13 +20,22 @@ export const chunkText = (
   maxChars: number = env.CHUNK_MAX_CHARS,
 ): Chunk[] => {
   const paragraphs = splitParagraphs(text, maxChars)
-  const chunks: { content: string; metadata: string }[] = []
+  const parts: { content: string; headings: string }[] = []
   let buffer: Paragraph[] = []
   let bufLen = 0
 
+  // A chunk's heading context is the heading path of its last paragraph, i.e.
+  // the deepest section heading the chunk sits under.
+  const flush = (): void => {
+    parts.push({
+      content: buffer.map(p => p.text).join('\n'),
+      headings: buffer.at(-1)?.headingPath ?? '',
+    })
+  }
+
   for (const para of paragraphs) {
     if (bufLen + para.text.length > maxChars && buffer.length > 0) {
-      chunks.push(buildChunk(buffer, relPath, kb))
+      flush()
       const overlap = drainOverlap(buffer, OVERLAP_CHARS)
       buffer = overlap
       bufLen = countChars(overlap)
@@ -35,17 +44,15 @@ export const chunkText = (
     bufLen += para.text.length + 1
   }
 
-  if (buffer.length > 0) {
-    chunks.push(buildChunk(buffer, relPath, kb))
-  }
+  if (buffer.length > 0) flush()
 
-  if (chunks.length === 0) {
+  if (parts.length === 0) {
     return [{ content: '', metadata: metadataJson(kb, relPath, '', frontmatter, 0, 1) }]
   }
 
-  return chunks.map((c, i) => ({
-    content: c.content,
-    metadata: metadataJson(kb, relPath, getHeadingPath(c), frontmatter, i, chunks.length),
+  return parts.map((part, i) => ({
+    content: part.content,
+    metadata: metadataJson(kb, relPath, part.headings, frontmatter, i, parts.length),
   }))
 }
 
@@ -60,22 +67,6 @@ const metadataJson = (
   const base: Record<string, unknown> = { kb, path: relPath, headings, chunkIndex, total }
   if (frontmatter && Object.keys(frontmatter).length > 0) base.frontmatter = frontmatter
   return JSON.stringify(base)
-}
-
-const getHeadingPath = (chunk: { content: string; metadata: string }): string => {
-  try {
-    return (JSON.parse(chunk.metadata) as { headings: string }).headings
-  } catch {
-    return ''
-  }
-}
-
-const buildChunk = (lines: Paragraph[], relPath: string, kb: string) => {
-  const content = lines.map(p => p.text).join('\n')
-  return {
-    content,
-    metadata: JSON.stringify({ kb, path: relPath, headings: lines.at(-1)?.headingPath ?? '' }),
-  }
 }
 
 const splitParagraphs = (text: string, maxChars: number): Paragraph[] => {

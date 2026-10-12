@@ -209,6 +209,25 @@ describe('SqliteJobQueue', () => {
     expect(s2.failed).toBe(0)
   })
 
+  test('complete deletes a job whose hash is unchanged', async () => {
+    await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'same', mtime: 1, bytes: 100 }])
+    const [job] = await queue.claim(1)
+    await queue.complete(job.id, 'same')
+    expect(await queue.stats()).toEqual({ pending: 0, processing: 0, failed: 0 })
+  })
+
+  test('complete re-arms a job superseded by a newer enqueue', async () => {
+    await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'old', mtime: 1, bytes: 100 }])
+    const [job] = await queue.claim(1)
+    // A concurrent scan re-enqueues the same file with a newer hash while the job runs.
+    await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'new', mtime: 2, bytes: 120 }])
+    await queue.complete(job.id, 'old')
+
+    expect((await queue.stats()).pending).toBe(1)
+    const [again] = await queue.claim(1)
+    expect(again.sha256).toBe('new')
+  })
+
   test('clear removes all jobs', async () => {
     await queue.enqueue([{ kb: 'kb1', relPath: 'a.md', op: 'index', sha256: 'abc', mtime: 1, bytes: 100 }])
     await queue.clear()

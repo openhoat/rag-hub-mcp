@@ -72,4 +72,21 @@ describe('pgJobQueue (e2e, in-memory PGlite)', () => {
     expect(running.progressDone).toBe(2)
     expect(running.progressTotal).toBe(7)
   })
+
+  test('should re-arm a job superseded by a newer enqueue on complete', async () => {
+    const q = await createPgliteJobQueue()
+    try {
+      await q.enqueue([newJob({ relPath: 'superseded.md', sha256: 'old' })])
+      const [job] = await q.claim(1)
+      // A concurrent scan re-enqueues the same file with a newer hash while it runs.
+      await q.enqueue([newJob({ relPath: 'superseded.md', sha256: 'new', mtime: 2, bytes: 120 })])
+      await q.complete(job.id, 'old')
+
+      expect((await q.stats()).pending).toBe(1)
+      const [again] = await q.claim(1)
+      expect(again.sha256).toBe('new')
+    } finally {
+      await q.close()
+    }
+  })
 })

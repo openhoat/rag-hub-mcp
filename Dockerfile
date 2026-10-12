@@ -6,6 +6,8 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build
+# Drop devDependencies from the runtime image (typescript, vitest, ...).
+RUN npm prune --omit=dev
 
 FROM node:24-slim AS runner
 WORKDIR /app
