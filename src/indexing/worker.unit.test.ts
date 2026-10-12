@@ -150,7 +150,7 @@ describe('worker job deadline', () => {
     vi.mocked(indexFile).mockImplementation(
       (...args: unknown[]) =>
         new Promise<boolean>((_resolve, reject) => {
-          const signal = args[6] as AbortSignal | undefined
+          const signal = (args[5] as { signal?: AbortSignal } | undefined)?.signal
           signal?.addEventListener('abort', () => reject(signal.reason))
         }),
     )
@@ -198,7 +198,7 @@ describe('worker job deadline', () => {
 describe('worker progress', () => {
   test('should forward index progress to the queue', async () => {
     vi.mocked(indexFile).mockImplementation(async (...args: unknown[]) => {
-      const onProgress = args[7] as ((done: number, total: number) => void) | undefined
+      const onProgress = (args[5] as { onProgress?: (done: number, total: number) => void } | undefined)?.onProgress
       onProgress?.(1, 3)
       return true
     })

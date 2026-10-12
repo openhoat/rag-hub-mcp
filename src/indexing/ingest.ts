@@ -251,16 +251,22 @@ const cleanupStale = async (store: Store, queue: JobQueue, kbDirs: string[], kno
   }
 }
 
+export interface IndexFileOptions {
+  mtimeMs: number
+  size: number
+  signal?: AbortSignal
+  onProgress?: (done: number, total: number) => void
+}
+
 export const indexFile = async (
   store: Store,
   kbId: number,
   relPath: string,
   fullPath: string,
   sha256: string,
-  st: { mtimeMs: number; size: number },
-  signal?: AbortSignal,
-  onProgress?: (done: number, total: number) => void,
+  opts: IndexFileOptions,
 ): Promise<boolean> => {
+  const { signal, onProgress } = opts
   const { text, frontmatter } = await extractText(fullPath)
   if (!text) return false
 
@@ -268,8 +274,8 @@ export const indexFile = async (
     kbId,
     relPath,
     sha256,
-    mtime: Math.floor(st.mtimeMs),
-    bytes: st.size,
+    mtime: Math.floor(opts.mtimeMs),
+    bytes: opts.size,
   })
 
   const kbName = await store.getKbName(kbId)
@@ -327,20 +333,26 @@ const embedChunksBounded = async (texts: string[], signal?: AbortSignal): Promis
 
   const embeddings: Float32Array[] = []
   for (let i = 0; i < texts.length; i++) {
-    let emb: Float32Array | undefined
-    for (let attempt = 1; attempt <= EMBED_PER_CHUNK_MAX_ATTEMPTS && !emb; attempt++) {
-      try {
-        const [vector] = await embedTexts([texts[i]], undefined, signal)
-        emb = vector
-      } catch (perChunkErr) {
-        if (signal?.aborted) throw perChunkErr
-        logger.warn('embed failed for chunk %d (attempt %d/%d)', i, attempt, EMBED_PER_CHUNK_MAX_ATTEMPTS, perChunkErr)
-        if (attempt < EMBED_PER_CHUNK_MAX_ATTEMPTS) await delay(EMBED_PER_CHUNK_RETRY_DELAY_MS)
-      }
-    }
+    const emb = await embedOneChunk(texts[i], i, signal)
     if (emb) embeddings[i] = emb
   }
   return embeddings
+}
+
+/** Embed one chunk with a bounded number of attempts; returns undefined when
+ *  every attempt fails (the chunk is kept without a vector). */
+const embedOneChunk = async (text: string, index: number, signal?: AbortSignal): Promise<Float32Array | undefined> => {
+  for (let attempt = 1; attempt <= EMBED_PER_CHUNK_MAX_ATTEMPTS; attempt++) {
+    try {
+      const [vector] = await embedTexts([text], undefined, signal)
+      return vector
+    } catch (err) {
+      if (signal?.aborted) throw err
+      logger.warn('embed failed for chunk %d (attempt %d/%d)', index, attempt, EMBED_PER_CHUNK_MAX_ATTEMPTS, err)
+      if (attempt < EMBED_PER_CHUNK_MAX_ATTEMPTS) await delay(EMBED_PER_CHUNK_RETRY_DELAY_MS)
+    }
+  }
+  return undefined
 }
 
 export const addDocument = async (store: Store, queue: JobQueue, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {

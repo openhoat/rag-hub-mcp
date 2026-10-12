@@ -29,14 +29,14 @@ const migrate = (db: Database.Database): void => {
     )
   `)
   // Existing databases created before these columns existed: add them idempotently.
-  const columns = (db.prepare('PRAGMA table_info(jobs)').all() as { name: string }[]).map(c => c.name)
-  if (!columns.includes('retry_at')) {
+  const columns = new Set((db.prepare('PRAGMA table_info(jobs)').all() as { name: string }[]).map(c => c.name))
+  if (!columns.has('retry_at')) {
     db.exec('ALTER TABLE jobs ADD COLUMN retry_at INTEGER')
   }
-  if (!columns.includes('progress_done')) {
+  if (!columns.has('progress_done')) {
     db.exec('ALTER TABLE jobs ADD COLUMN progress_done INTEGER')
   }
-  if (!columns.includes('progress_total')) {
+  if (!columns.has('progress_total')) {
     db.exec('ALTER TABLE jobs ADD COLUMN progress_total INTEGER')
   }
   db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)')

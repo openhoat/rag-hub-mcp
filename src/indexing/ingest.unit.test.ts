@@ -157,9 +157,11 @@ describe('indexFile', () => {
     }))
 
     const seen: Array<[number, number]> = []
-    await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', { mtimeMs: 0, size: 40 }, undefined, (done, total) =>
-      seen.push([done, total]),
-    )
+    await indexFile(store, kbId, 'a.md', join(root, 'docs', 'a.md'), 'abc', {
+      mtimeMs: 0,
+      size: 40,
+      onProgress: (done, total) => seen.push([done, total]),
+    })
 
     const chunks = await store.getAllChunks('docs')
     expect(chunks.length).toBeGreaterThan(1)
