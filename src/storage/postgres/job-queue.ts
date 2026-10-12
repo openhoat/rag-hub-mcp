@@ -99,6 +99,90 @@ const clearKbJobs = (db: Db, kb: string): Promise<void> => db.query('DELETE FROM
 const clearFileJob = (db: Db, kb: string, relPath: string): Promise<void> =>
   db.query('DELETE FROM jobs WHERE kb = $1 AND rel_path = $2', [kb, relPath]) as unknown as Promise<void>
 
+const enqueueJobs0 = async (db: Db, jobs: NewJob[]): Promise<void> => {
+  const sql = `
+    INSERT INTO jobs (kb, rel_path, op, sha256, mtime, bytes, status)
+    VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+    ON CONFLICT(kb, rel_path, op) DO UPDATE SET
+      sha256 = EXCLUDED.sha256,
+      mtime = EXCLUDED.mtime,
+      bytes = EXCLUDED.bytes,
+      status = CASE
+        WHEN jobs.status = 'failed' THEN 'pending'
+        ELSE jobs.status
+      END,
+      attempts = CASE
+        WHEN jobs.status = 'failed' THEN 0
+        ELSE jobs.attempts
+      END,
+      retry_at = CASE
+        WHEN jobs.status = 'failed' THEN NULL
+        ELSE jobs.retry_at
+      END,
+      last_error = NULL
+  `
+  for (const j of jobs) {
+    await db.query(sql, [j.kb, j.relPath, j.op, j.sha256, j.mtime, j.bytes])
+  }
+}
+
+const claimJobs0 = async (db: Db, limit: number): Promise<IndexJob[]> => {
+  const sql = `
+    UPDATE jobs SET status = 'processing', started_at = NOW(), progress_done = NULL, progress_total = NULL
+    WHERE id IN (
+      SELECT id FROM jobs WHERE status = 'pending' AND (retry_at IS NULL OR retry_at <= NOW())
+      ORDER BY id LIMIT $1
+      FOR UPDATE SKIP LOCKED
+    )
+    RETURNING *
+  `
+  const res = await db.query<Record<string, unknown>>(sql, [limit])
+  return res.rows.map(rowToJob)
+}
+
+const failJob0 = async (db: Db, id: number, error: string): Promise<void> => {
+  const current = await db.query<{ attempts: number }>('SELECT attempts FROM jobs WHERE id = $1', [id])
+  const attempts = Number(current.rows[0]?.attempts ?? 0) + 1
+  const parked = attempts >= RETRY_MAX
+  const retryAt = parked ? null : new Date(Date.now() + retryBackoffMs(attempts, RETRY_BASE_MS, RETRY_MAX_MS))
+  await db.query(
+    'UPDATE jobs SET attempts = $1, last_error = $2, status = $3, retry_at = $4, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = $5',
+    [attempts, error, parked ? 'failed' : 'pending', retryAt, id],
+  )
+}
+
+const reclaimStale0 = async (db: Db, timeoutSeconds: number): Promise<number> => {
+  const cutoff = new Date(Date.now() - timeoutSeconds * 1000).toISOString()
+  const res = await db.query<{ id: number; attempts: number }>(
+    "SELECT id, attempts FROM jobs WHERE status = 'processing' AND started_at < $1",
+    [cutoff],
+  )
+  // Reclaiming counts as an attempt so a job can never loop forever between
+  // reclaim and claim without eventually reaching 'failed'.
+  for (const r of res.rows) {
+    const attempts = Number(r.attempts) + 1
+    const parked = attempts >= RETRY_MAX
+    await db.query(
+      'UPDATE jobs SET status = $1, attempts = $2, last_error = $3, retry_at = $4, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = $5',
+      [parked ? 'failed' : 'pending', attempts, 'reclaimed (stale)', parked ? null : new Date(), r.id],
+    )
+  }
+  return res.rows.length
+}
+
+const stats0 = async (db: Db): Promise<JobStats> => {
+  const res = await db.query<{ status: string; cnt: number }>(
+    "SELECT status, COUNT(*)::int AS cnt FROM jobs WHERE status IN ('pending', 'processing', 'failed') GROUP BY status",
+  )
+  const m: JobStats = { pending: 0, processing: 0, failed: 0 }
+  for (const r of res.rows) {
+    if (r.status === 'pending') m.pending = r.cnt
+    else if (r.status === 'processing') m.processing = r.cnt
+    else if (r.status === 'failed') m.failed = r.cnt
+  }
+  return m
+}
+
 export const createJobQueueFromDb = (db: Db): JobQueue => {
   let migrated = false
   const ensureMigrated = async (): Promise<void> => {
@@ -110,92 +194,26 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
 
   const enqueue = async (jobs: NewJob[]): Promise<void> => {
     await ensureMigrated()
-    const sql = `
-      INSERT INTO jobs (kb, rel_path, op, sha256, mtime, bytes, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-      ON CONFLICT(kb, rel_path, op) DO UPDATE SET
-        sha256 = EXCLUDED.sha256,
-        mtime = EXCLUDED.mtime,
-        bytes = EXCLUDED.bytes,
-        status = CASE
-          WHEN jobs.status = 'failed' THEN 'pending'
-          ELSE jobs.status
-        END,
-        attempts = CASE
-          WHEN jobs.status = 'failed' THEN 0
-          ELSE jobs.attempts
-        END,
-        retry_at = CASE
-          WHEN jobs.status = 'failed' THEN NULL
-          ELSE jobs.retry_at
-        END,
-        last_error = NULL
-    `
-    for (const j of jobs) {
-      await db.query(sql, [j.kb, j.relPath, j.op, j.sha256, j.mtime, j.bytes])
-    }
+    await enqueueJobs0(db, jobs)
   }
 
   const claim = async (limit: number): Promise<IndexJob[]> => {
     await ensureMigrated()
-    const sql = `
-      UPDATE jobs SET status = 'processing', started_at = NOW(), progress_done = NULL, progress_total = NULL
-      WHERE id IN (
-        SELECT id FROM jobs WHERE status = 'pending' AND (retry_at IS NULL OR retry_at <= NOW())
-        ORDER BY id LIMIT $1
-        FOR UPDATE SKIP LOCKED
-      )
-      RETURNING *
-    `
-    const res = await db.query<Record<string, unknown>>(sql, [limit])
-    return res.rows.map(rowToJob)
+    return claimJobs0(db, limit)
   }
 
   const complete = async (id: number, sha256?: string): Promise<void> => completeJob(db, id, sha256)
 
-  const fail = async (id: number, error: string): Promise<void> => {
-    const current = await db.query<{ attempts: number }>('SELECT attempts FROM jobs WHERE id = $1', [id])
-    const attempts = Number(current.rows[0]?.attempts ?? 0) + 1
-    const parked = attempts >= RETRY_MAX
-    const retryAt = parked ? null : new Date(Date.now() + retryBackoffMs(attempts, RETRY_BASE_MS, RETRY_MAX_MS))
-    await db.query(
-      'UPDATE jobs SET attempts = $1, last_error = $2, status = $3, retry_at = $4, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = $5',
-      [attempts, error, parked ? 'failed' : 'pending', retryAt, id],
-    )
-  }
+  const fail = async (id: number, error: string): Promise<void> => failJob0(db, id, error)
 
   const reclaimStale = async (timeoutSeconds: number): Promise<number> => {
     await ensureMigrated()
-    const cutoff = new Date(Date.now() - timeoutSeconds * 1000).toISOString()
-    const res = await db.query<{ id: number; attempts: number }>(
-      "SELECT id, attempts FROM jobs WHERE status = 'processing' AND started_at < $1",
-      [cutoff],
-    )
-    // Reclaiming counts as an attempt so a job can never loop forever between
-    // reclaim and claim without eventually reaching 'failed'.
-    for (const r of res.rows) {
-      const attempts = Number(r.attempts) + 1
-      const parked = attempts >= RETRY_MAX
-      await db.query(
-        'UPDATE jobs SET status = $1, attempts = $2, last_error = $3, retry_at = $4, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = $5',
-        [parked ? 'failed' : 'pending', attempts, 'reclaimed (stale)', parked ? null : new Date(), r.id],
-      )
-    }
-    return res.rows.length
+    return reclaimStale0(db, timeoutSeconds)
   }
 
   const stats = async (): Promise<JobStats> => {
     await ensureMigrated()
-    const res = await db.query<{ status: string; cnt: number }>(
-      "SELECT status, COUNT(*)::int AS cnt FROM jobs WHERE status IN ('pending', 'processing', 'failed') GROUP BY status",
-    )
-    const m: JobStats = { pending: 0, processing: 0, failed: 0 }
-    for (const r of res.rows) {
-      if (r.status === 'pending') m.pending = r.cnt
-      else if (r.status === 'processing') m.processing = r.cnt
-      else if (r.status === 'failed') m.failed = r.cnt
-    }
-    return m
+    return stats0(db)
   }
 
   const failedList = async (limit = 20): Promise<IndexJob[]> => failedList0(db, limit)

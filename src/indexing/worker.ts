@@ -25,6 +25,45 @@ const handleJobError = async (queue: JobQueue, job: IndexJob, err: unknown): Pro
   await queue.fail(job.id, msg)
 }
 
+const processJob = async (store: Store, queue: JobQueue, job: IndexJob): Promise<void> => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`job ${job.id} exceeded INDEXER_JOB_TIMEOUT_MS (${JOB_TIMEOUT_MS}ms)`))
+  }, JOB_TIMEOUT_MS)
+  timer.unref?.()
+  try {
+    const fullPath = sanitizeRelativePath(KB_ROOT, job.kb, job.relPath)
+    if (!existsSync(fullPath)) {
+      await queue.complete(job.id)
+      return
+    }
+    const kbId = await store.getKbId(job.kb)
+    if (!kbId) {
+      await queue.complete(job.id)
+      return
+    }
+    const indexed = await indexFile(store, kbId, job.relPath, fullPath, job.sha256, {
+      mtimeMs: job.mtime,
+      size: job.bytes,
+      signal: controller.signal,
+      // Best-effort progress reporting: a failed write must never fail the job.
+      onProgress: (done, total) => {
+        void queue.progress(job.id, done, total).catch(() => {})
+      },
+    })
+    if (indexed) {
+      await queue.complete(job.id, job.sha256)
+    } else {
+      logger.warn('not indexable (no text): %s/%s', job.kb, job.relPath)
+      await queue.complete(job.id, job.sha256)
+    }
+  } catch (err) {
+    await handleJobError(queue, job, err)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export const createWorker = (store: Store, queue: JobQueue): Worker => {
   let running = false
   let firstPoll = true
@@ -56,7 +95,7 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
           logger.warn('skipping re-claim of in-flight job %d (%s/%s)', job.id, job.kb, job.relPath)
           continue
         }
-        const p = processJob(job)
+        const p = processJob(store, queue, job)
         inFlight.set(job.id, p)
         void p.finally(() => {
           if (inFlight.get(job.id) === p) inFlight.delete(job.id)
@@ -65,52 +104,6 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
       }
     } catch (err) {
       logger.error('worker poll failed: %s', err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const processJob = async (job: IndexJob): Promise<void> => {
-    const controller = new AbortController()
-    const timer = setTimeout(() => {
-      controller.abort(new Error(`job ${job.id} exceeded INDEXER_JOB_TIMEOUT_MS (${JOB_TIMEOUT_MS}ms)`))
-    }, JOB_TIMEOUT_MS)
-    timer.unref?.()
-    try {
-      const fullPath = sanitizeRelativePath(KB_ROOT, job.kb, job.relPath)
-      if (!existsSync(fullPath)) {
-        await queue.complete(job.id)
-        return
-      }
-      const kbId = await store.getKbId(job.kb)
-      if (!kbId) {
-        await queue.complete(job.id)
-        return
-      }
-      const indexed = await indexFile(
-        store,
-        kbId,
-        job.relPath,
-        fullPath,
-        job.sha256,
-        {
-          mtimeMs: job.mtime,
-          size: job.bytes,
-        },
-        controller.signal,
-        // Best-effort progress reporting: a failed write must never fail the job.
-        (done, total) => {
-          void queue.progress(job.id, done, total).catch(() => {})
-        },
-      )
-      if (indexed) {
-        await queue.complete(job.id, job.sha256)
-      } else {
-        logger.warn('not indexable (no text): %s/%s', job.kb, job.relPath)
-        await queue.complete(job.id, job.sha256)
-      }
-    } catch (err) {
-      await handleJobError(queue, job, err)
-    } finally {
-      clearTimeout(timer)
     }
   }
 

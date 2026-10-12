@@ -262,24 +262,25 @@ const statusHandler = async (store: Store, queue: JobQueue, _args: Record<string
   return { content: [{ type: 'text', text: lines.join('\n') }] }
 }
 
+const processingLines = (jobs: IndexJob[], now: number): string[] =>
+  jobs.map(j => {
+    const age = j.startedAt ? ` (${Math.round((now - j.startedAt) / 1000)}s)` : ''
+    return `- **${j.kb}/${j.relPath}**: ${progressLabel(j)}${age}, attempt ${j.attempts}`
+  })
+
+const failedLines = (jobs: IndexJob[]): string[] =>
+  jobs.map(j => `- **${j.kb}/${j.relPath}**: ${j.lastError ?? 'unknown'} (${j.attempts} attempts)`)
+
 const jobsHandler = async (_store: Store, queue: JobQueue, _args: Record<string, unknown>): Promise<ToolResult> => {
   const stats = await queue.stats()
   const failed = await queue.failedList()
   const processing = await queue.processingList()
   const lines = [`Queue: ${stats.pending} pending, ${stats.processing} processing, ${stats.failed} failed`]
   if (processing.length > 0) {
-    const now = Date.now()
-    lines.push('', '**Processing:**')
-    for (const j of processing) {
-      const ageS = j.startedAt ? Math.round((now - j.startedAt) / 1000) : null
-      lines.push(`- **${j.kb}/${j.relPath}**: ${progressLabel(j)}${ageS === null ? '' : ` (${ageS}s)`}, attempt ${j.attempts}`)
-    }
+    lines.push('', '**Processing:**', ...processingLines(processing, Date.now()))
   }
   if (failed.length > 0) {
-    lines.push('', '**Failed jobs:**')
-    for (const j of failed) {
-      lines.push(`- **${j.kb}/${j.relPath}**: ${j.lastError ?? 'unknown'} (${j.attempts} attempts)`)
-    }
+    lines.push('', '**Failed jobs:**', ...failedLines(failed))
   }
   return { content: [{ type: 'text', text: lines.join('\n') }] }
 }
