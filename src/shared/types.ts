@@ -117,6 +117,10 @@ export interface IndexJob extends NewJob {
   startedAt?: number | null
   /** Epoch ms before which a 'pending' job must not be claimed (retry backoff). */
   retryAt?: number | null
+  /** Chunks already written for a running job (null before the first chunk). */
+  progressDone?: number | null
+  /** Total chunks to write for a running job (null until known). */
+  progressTotal?: number | null
 }
 
 export interface JobStats {
@@ -135,6 +139,8 @@ export interface JobQueue {
   failedList(limit?: number): Promise<IndexJob[]>
   /** Jobs currently being processed, oldest first (for observability). */
   processingList(limit?: number): Promise<IndexJob[]>
+  /** Record indexing progress for a running job (chunks written / total). */
+  progress(id: number, done: number, total: number): Promise<void>
   retryJob(id: number): Promise<void>
   clear(): Promise<void>
   clearForKb(kb: string): Promise<void>

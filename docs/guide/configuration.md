@@ -180,5 +180,6 @@ Indexing is asynchronous. The **producer** (`scanAll`) discovers files on disk, 
   also never starts a second execution of a job whose previous attempt is still in
   flight, even if it is re-claimed.
 - **Progress visibility** — `GET /admin/status` / `rag_status` report the number of
-  documents with unsearchable (null-embedding) chunks, and `GET /admin/jobs` /
-  `rag_jobs` list the jobs currently `processing` with their running time.
+  documents with unsearchable (null-embedding) chunks and list the jobs currently
+  `processing` with their per-job chunk progress (`done/total`); `GET /admin/jobs` /
+  `rag_jobs` additionally report each in-flight job's running time.

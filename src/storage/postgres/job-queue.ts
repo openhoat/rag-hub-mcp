@@ -23,10 +23,14 @@ const migrateSql = `
     last_error TEXT,
     started_at TIMESTAMPTZ,
     retry_at TIMESTAMPTZ,
+    progress_done INTEGER,
+    progress_total INTEGER,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(kb, rel_path, op)
   );
   ALTER TABLE jobs ADD COLUMN IF NOT EXISTS retry_at TIMESTAMPTZ;
+  ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress_done INTEGER;
+  ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress_total INTEGER;
   CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 `
 
@@ -43,6 +47,8 @@ const rowToJob = (r: Record<string, unknown>): IndexJob => ({
   lastError: (r.last_error as string) ?? null,
   startedAt: r.started_at ? new Date(r.started_at as string).getTime() : null,
   retryAt: r.retry_at ? new Date(r.retry_at as string).getTime() : null,
+  progressDone: r.progress_done == null ? null : Number(r.progress_done),
+  progressTotal: r.progress_total == null ? null : Number(r.progress_total),
 })
 
 const completeJob = (db: Db, id: number): Promise<void> => db.query('DELETE FROM jobs WHERE id = $1', [id]) as unknown as Promise<void>
@@ -66,6 +72,9 @@ const retryJob0 = (db: Db, id: number): Promise<void> =>
     id,
     'failed',
   ]) as unknown as Promise<void>
+
+const progress0 = (db: Db, id: number, done: number, total: number): Promise<void> =>
+  db.query('UPDATE jobs SET progress_done = $1, progress_total = $2 WHERE id = $3', [done, total, id]) as unknown as Promise<void>
 
 const clearJobs = (db: Db): Promise<void> => db.query('DELETE FROM jobs') as unknown as Promise<void>
 
@@ -114,7 +123,7 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
   const claim = async (limit: number): Promise<IndexJob[]> => {
     await ensureMigrated()
     const sql = `
-      UPDATE jobs SET status = 'processing', started_at = NOW()
+      UPDATE jobs SET status = 'processing', started_at = NOW(), progress_done = NULL, progress_total = NULL
       WHERE id IN (
         SELECT id FROM jobs WHERE status = 'pending' AND (retry_at IS NULL OR retry_at <= NOW())
         ORDER BY id LIMIT $1
@@ -133,13 +142,10 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
     const attempts = Number(current.rows[0]?.attempts ?? 0) + 1
     const parked = attempts >= RETRY_MAX
     const retryAt = parked ? null : new Date(Date.now() + retryBackoffMs(attempts, RETRY_BASE_MS, RETRY_MAX_MS))
-    await db.query('UPDATE jobs SET attempts = $1, last_error = $2, status = $3, retry_at = $4, started_at = NULL WHERE id = $5', [
-      attempts,
-      error,
-      parked ? 'failed' : 'pending',
-      retryAt,
-      id,
-    ])
+    await db.query(
+      'UPDATE jobs SET attempts = $1, last_error = $2, status = $3, retry_at = $4, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = $5',
+      [attempts, error, parked ? 'failed' : 'pending', retryAt, id],
+    )
   }
 
   const reclaimStale = async (timeoutSeconds: number): Promise<number> => {
@@ -154,13 +160,10 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
     for (const r of res.rows) {
       const attempts = Number(r.attempts) + 1
       const parked = attempts >= RETRY_MAX
-      await db.query('UPDATE jobs SET status = $1, attempts = $2, last_error = $3, retry_at = $4, started_at = NULL WHERE id = $5', [
-        parked ? 'failed' : 'pending',
-        attempts,
-        'reclaimed (stale)',
-        parked ? null : new Date(),
-        r.id,
-      ])
+      await db.query(
+        'UPDATE jobs SET status = $1, attempts = $2, last_error = $3, retry_at = $4, started_at = NULL, progress_done = NULL, progress_total = NULL WHERE id = $5',
+        [parked ? 'failed' : 'pending', attempts, 'reclaimed (stale)', parked ? null : new Date(), r.id],
+      )
     }
     return res.rows.length
   }
@@ -183,6 +186,8 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
 
   const processingList = async (limit = 50): Promise<IndexJob[]> => processingList0(db, limit)
 
+  const progress = async (id: number, done: number, total: number): Promise<void> => progress0(db, id, done, total)
+
   const retryJob = async (id: number): Promise<void> => retryJob0(db, id)
 
   const clear = async (): Promise<void> => clearJobs(db)
@@ -202,6 +207,7 @@ export const createJobQueueFromDb = (db: Db): JobQueue => {
     stats,
     failedList,
     processingList,
+    progress,
     retryJob,
     clear,
     clearForKb,

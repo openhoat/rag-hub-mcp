@@ -96,6 +96,10 @@ export const createWorker = (store: Store, queue: JobQueue): Worker => {
           size: job.bytes,
         },
         controller.signal,
+        // Best-effort progress reporting: a failed write must never fail the job.
+        (done, total) => {
+          void queue.progress(job.id, done, total).catch(() => {})
+        },
       )
       if (indexed) {
         await queue.complete(job.id)

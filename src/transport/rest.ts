@@ -184,7 +184,8 @@ export const createRestApp = async (store: Store, queue: JobQueue) => {
     const kbs = await store.listKbs()
     const queueStats = await queue.stats()
     const nullEmbeddings = await store.countFilesWithNullEmbeddings()
-    void reply.send({ kbs, indexer: queueStats, unsearchableDocuments: nullEmbeddings })
+    const processing = await queue.processingList()
+    void reply.send({ kbs, indexer: queueStats, unsearchableDocuments: nullEmbeddings, processing })
   })
 
   app.get('/admin/jobs', async (req, reply) => {

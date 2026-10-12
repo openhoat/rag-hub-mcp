@@ -72,7 +72,7 @@
 
 ### #25 [FEAT] Indexing observability — per-job progress + null-embedding count
 
-- [ ] expose per-job progress (chunks done/total) via `/admin/status` and `rag_status`
+- [x] expose per-job progress (chunks done/total) via `/admin/status` and `rag_status`
 - [x] report the count of files with null embeddings (indexed but unsearchable) via `GET /admin/status` / `rag_status`, and list `processing` jobs with their age via `GET /admin/jobs` / `rag_jobs`
 
 ### #26 [PERF] Contextual chunking = N LLM calls per document (fragile laptop dependency)

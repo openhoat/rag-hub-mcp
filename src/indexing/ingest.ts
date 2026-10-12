@@ -259,6 +259,7 @@ export const indexFile = async (
   sha256: string,
   st: { mtimeMs: number; size: number },
   signal?: AbortSignal,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<boolean> => {
   const { text, frontmatter } = await extractText(fullPath)
   if (!text) return false
@@ -274,6 +275,7 @@ export const indexFile = async (
   const kbName = await store.getKbName(kbId)
   const chunks = chunkText(text, relPath, kbName, frontmatter)
   if (chunks.length === 0) return false
+  onProgress?.(0, chunks.length)
 
   const texts = await mapLimit(chunks, env.CONTEXTUAL_CHUNKING_CONCURRENCY, c => {
     const meta = JSON.parse(c.metadata) as {
@@ -303,6 +305,7 @@ export const indexFile = async (
       metadata: c.metadata,
       embedding: emb,
     })
+    onProgress?.(i + 1, chunks.length)
   }
   return true
 }
