@@ -344,6 +344,93 @@ describe('scanAll', () => {
   })
 })
 
+describe('scan serialization', () => {
+  // A scan ends with cleanupStale, which deletes every row the walk did not
+  // see again: two overlapping walks can delete each other's fresh rows. The
+  // slot below serializes them, and coalesces a scan onto the one in flight.
+  const gateOnKnownFiles = (store: Store): { release: () => void; calls: () => number } => {
+    const spy = vi.spyOn(store, 'listKnownFiles')
+    let release = (): void => {}
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    spy.mockImplementationOnce(async () => {
+      await gate
+      return []
+    })
+    return { release, calls: () => spy.mock.calls.length }
+  }
+
+  test('should coalesce a concurrent scan onto the one in flight', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    const { release, calls } = gateOnKnownFiles(store)
+
+    const first = scanAll(store, queue, root)
+    const second = scanAll(store, queue, root)
+    release()
+    const [a, b] = await Promise.all([first, second])
+
+    expect(calls()).toBe(1)
+    expect(b).toBe(a)
+    expect(a.enqueued).toBe(1)
+    expect(queue.enqueued).toHaveLength(1)
+  })
+
+  test('should start a new walk once the previous one settled', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    const spy = vi.spyOn(store, 'listKnownFiles')
+
+    await scanAll(store, queue, root)
+    queue.enqueued.length = 0
+    const second = await scanAll(store, queue, root)
+
+    expect(spy.mock.calls.length).toBe(2)
+    expect(second.enqueued).toBe(1)
+  })
+
+  test('should release the slot when a scan fails', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    vi.spyOn(store, 'listKnownFiles').mockRejectedValueOnce(new Error('boom'))
+
+    await expect(scanAll(store, queue, root)).rejects.toThrow('boom')
+    const recovered = await scanAll(store, queue, root)
+
+    expect(recovered.enqueued).toBe(1)
+  })
+
+  test('should drain the in-flight scan before a forced reindex purges', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    writeFileSync(join(root, 'docs', 'a.md'), '# hello', 'utf-8')
+    const purgeSpy = vi.spyOn(store, 'purgeKb')
+    const { release } = gateOnKnownFiles(store)
+
+    const scan = scanAll(store, queue, root)
+    const forced = forceReindex(store, queue, root)
+    expect(purgeSpy).not.toHaveBeenCalled()
+
+    release()
+    await Promise.all([scan, forced])
+
+    expect(purgeSpy).toHaveBeenCalled()
+    expect(queue.enqueued).toHaveLength(2)
+  })
+})
+
 describe('addDocument', () => {
   test('should write a file and enqueue an index job', async () => {
     const setup = setupKb()

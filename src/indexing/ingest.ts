@@ -44,16 +44,51 @@ const canIndexFile = (fullPath: string): boolean => {
   }
 }
 
-export const forceReindex = async (store: Store, queue: JobQueue, root: string = KB_ROOT): Promise<IngestResult> => {
-  const kbs = await store.listAllKbs()
-  for (const kb of kbs) {
-    await store.purgeKb(kb.id)
-  }
-  await queue.clear()
-  return scanAll(store, queue, root)
+/**
+ * A scan ends with `cleanupStale`, which deletes every `files` row the walk did
+ * not see again. Two scans running at once therefore delete each other's fresh
+ * rows: the second one starts from an older `knownFiles` snapshot and misses
+ * files the first one just enqueued. Scans are serialized through this slot; a
+ * scan requested while one is in flight is coalesced onto it: same promise,
+ * same result, no duplicate walk.
+ */
+let scanInFlight: Promise<IngestResult> | undefined
+
+const withScanSlot = (task: () => Promise<IngestResult>): Promise<IngestResult> => {
+  const running = task().finally(() => {
+    scanInFlight = undefined
+  })
+  scanInFlight = running
+  return running
 }
 
-export const scanAll = async (store: Store, queue: JobQueue, root: string = KB_ROOT): Promise<IngestResult> => {
+export const forceReindex = async (store: Store, queue: JobQueue, root: string = KB_ROOT): Promise<IngestResult> => {
+  // A forced reindex must keep its purge: it drains the in-flight scan and
+  // never coalesces onto it, which would silently degrade it to a plain scan.
+  while (scanInFlight) {
+    logger.info('reindex: waiting for the in-flight scan')
+    await scanInFlight.catch(() => undefined)
+  }
+
+  return withScanSlot(async () => {
+    const kbs = await store.listAllKbs()
+    for (const kb of kbs) {
+      await store.purgeKb(kb.id)
+    }
+    await queue.clear()
+    return scanTree(store, queue, root)
+  })
+}
+
+export const scanAll = (store: Store, queue: JobQueue, root: string = KB_ROOT): Promise<IngestResult> => {
+  if (scanInFlight) {
+    logger.info('scan: coalescing onto the in-flight scan')
+    return scanInFlight
+  }
+  return withScanSlot(() => scanTree(store, queue, root))
+}
+
+const scanTree = async (store: Store, queue: JobQueue, root: string): Promise<IngestResult> => {
   const result: IngestResult = {
     added: 0,
     modified: 0,
