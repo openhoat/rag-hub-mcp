@@ -1,3 +1,22 @@
+## [1.5.5](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.4...v1.5.5) (2026-10-27)
+
+### Bug Fixes
+
+* **indexer:** serialize scans so a concurrent walk cannot delete fresh rows ([9e8a015](https://github.com/openhoat/rag-hub-mcp/commit/9e8a0150095409d4d4130d9b6f1eb77da8b0bf56))
+
+### Chores
+
+* **changelog:** regenerate for v1.5.2-v1.5.4 ([838139d](https://github.com/openhoat/rag-hub-mcp/commit/838139d60fc2a26067739113c9f965b1fab359bb))
+* **release:** bump version to v1.5.5 ([f0f9cfa](https://github.com/openhoat/rag-hub-mcp/commit/f0f9cfa66dd299c79df552eb55ee3df347a3223f))
+
+### Documentation
+
+* **kanban:** keep open work only, history lives in the changelog ([1401441](https://github.com/openhoat/rag-hub-mcp/commit/14014413ae393cc51249aa19dd381988d0e86d32))
+
+### Refactoring
+
+* clear remaining SonarQube code smells ([815bbcc](https://github.com/openhoat/rag-hub-mcp/commit/815bbcc9f653f92c2971aec65fb8704724cde402))
+
 ## [1.5.4](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.3...v1.5.4) (2026-10-12)
 
 ### Chores
