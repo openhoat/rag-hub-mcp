@@ -13,3 +13,4 @@ a real trade-off. Each is a short paragraph, plus optional consequences.
 | [0006 — Raw SQL, no ORM](./0006-raw-sql-no-orm.md)                                                   | accepted |
 | [0007 — Dual transport: stdio and HTTP](./0007-dual-transport.md)                                    | accepted |
 | [0008 — Indexer robustness: deadline, backoff and safe reclaim](./0008-indexer-robustness.md)        | accepted |
+| [0009 — One scan at a time, coalesced](./0009-serialized-scans.md)                                   | accepted |

@@ -93,6 +93,12 @@ graph LR
 
 The producer (`ingest.ts:scanAll`) only handles the **cheap** part: filesystem scan, hash, unchanged detection. The **expensive** part (extraction, chunking, embedding, DB writes) runs in the worker.
 
+The producer also ends with `cleanupStale`, which deletes every `files` row the
+walk did not see again. Two overlapping walks would therefore delete each
+other's fresh rows, so scans share a single in-flight slot: a scan requested
+while one is running is coalesced onto it, and a forced reindex drains the
+running one to keep its purge ([ADR 0009](../adr/0009-serialized-scans.md)).
+
 ### Skip / modify / add decision
 
 For each file the producer checks:
