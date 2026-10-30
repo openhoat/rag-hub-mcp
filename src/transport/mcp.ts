@@ -47,7 +47,10 @@ const reindexArgs = {
 }
 
 export const createMcpServer = (store: Store, queue: JobQueue): McpServer => {
-  const server = new McpServer({ name: 'rag-hub-mcp', version: VERSION }, { capabilities: { tools: {} } })
+  const server = new McpServer(
+    { name: 'rag-hub-mcp', version: VERSION },
+    { capabilities: { tools: {} }, maxToolInputElements: env.MCP_MAX_TOOL_INPUT_ELEMENTS },
+  )
 
   server.registerTool('rag_list_kbs', { description: 'List available knowledge bases with stats' }, async () =>
     handleToolCall(store, queue, 'rag_list_kbs', {}),

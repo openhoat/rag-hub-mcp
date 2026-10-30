@@ -69,6 +69,10 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   MCP_SESSION_TTL_SECONDS: z.coerce.number().int().min(0).default(1800),
   MCP_SESSION_MAX: z.coerce.number().int().min(1).default(100),
+  // Ceiling on the combined number of array elements and object members one
+  // tools/call arguments payload may carry, enforced by McpServer before the
+  // tool schema runs. GHSA-f897-62hf-6gxq hardening.
+  MCP_MAX_TOOL_INPUT_ELEMENTS: z.coerce.number().int().min(1).default(10_000),
   MCP_SESSION_CREATE_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(30),
   SEARCH_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(60),
   REINDEX_RATE_PER_MINUTE: z.coerce.number().int().min(1).default(60),
