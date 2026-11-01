@@ -1,3 +1,19 @@
+## [1.5.6](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.5...v1.5.6) (2026-11-01)
+
+### Chores
+
+* **changelog:** regenerate for v1.5.5 ([2a1d996](https://github.com/openhoat/rag-hub-mcp/commit/2a1d996dc13d9beec1028016a20a54b083c4b27d))
+* **deps:** lift fastify and zod past npm audit advisories ([1e272a3](https://github.com/openhoat/rag-hub-mcp/commit/1e272a30e22137a4b8d07a42a588e0e1a435d4e9))
+* **release:** bump version to v1.5.6 ([1cd00ea](https://github.com/openhoat/rag-hub-mcp/commit/1cd00ea193b3d42ce0dbaad389939d6faa1dd08d))
+
+### Documentation
+
+* record serialized scans in the architecture guide and ADR 0009 ([46c3fc4](https://github.com/openhoat/rag-hub-mcp/commit/46c3fc41bf2bf844086137b6a44ba0854c459d04))
+
+### SECURITY
+
+* bump @modelcontextprotocol/sdk to 1.32.2 and bound tool input elements ([dceea12](https://github.com/openhoat/rag-hub-mcp/commit/dceea1281aed22bf551396bbae365bd5374fe65a))
+
 ## [1.5.5](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.4...v1.5.5) (2026-10-27)
 
 ### Bug Fixes
