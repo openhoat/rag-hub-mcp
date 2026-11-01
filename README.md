@@ -25,25 +25,25 @@ Most RAG setups need a vector database, a chunking pipeline, an embeddings servi
 ## How it works
 
 ```text
-./kbs/ — folders = knowledge bases
-  │
-  │  scan (SHA-256 diff) → enqueue index jobs
-  ▼
-worker (async, concurrent) → extract → chunk → embed
-  │  bge-m3 / any OpenAI-compatible API
-  ▼
-┌─────────────────────────────┐
-│  SQLite + FTS5              │
-│  or PostgreSQL + pgvector   │
-└─────────────────────────────┘
-  │
-  │  hybrid score
-  │  cosine 0.65 + FTS 0.35
-  ▼
-┌──────────────┐  ┌──────────────┐
-│  MCP tools   │  │  REST API    │
-│  stdio/http  │  │  /search     │
-└──────────────┘  └──────────────┘
+./kbs/: folders = knowledge bases
+  |
+  |  scan (SHA-256 diff) -> enqueue index jobs
+  v
+worker (async, concurrent) -> extract -> chunk -> embed
+  |  bge-m3 / any OpenAI-compatible API
+  v
++-----------------------------+
+|  SQLite + FTS5              |
+|  or PostgreSQL + pgvector   |
++-----------------------------+
+  |
+  |  hybrid score
+  |  cosine 0.65 + FTS 0.35
+  v
++--------------+  +--------------+
+|  MCP tools   |  |  REST API    |
+|  stdio/http  |  |  /search     |
++--------------+  +--------------+
 ```
 
 ## Install
