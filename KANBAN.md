@@ -22,4 +22,8 @@ released history lives in [CHANGELOG.md](CHANGELOG.md) and `git log`.
 - [ ] push cosine distance into SQL (`<=>` + index) on the Postgres side
 - [ ] consider an ANN index for SQLite (or a bound + rerank)
 
+### #18 [FIX] REST error handler turns every Fastify error into 500 (P3)
+
+- [ ] keep `err.statusCode` when it is a 4xx (429 keeps its own body), so a rejected JSON body answers 400 instead of 500
+
 ## In Progress
