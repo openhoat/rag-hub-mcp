@@ -22,8 +22,8 @@ released history lives in [CHANGELOG.md](CHANGELOG.md) and `git log`.
 - [ ] push cosine distance into SQL (`<=>` + index) on the Postgres side
 - [ ] consider an ANN index for SQLite (or a bound + rerank)
 
+## In Progress
+
 ### #14 [PERF] Ingestion with no file size bound
 
-- [ ] reject/skip beyond a configurable threshold before `readFileSync`/`hashFile`
-
-## In Progress
+- [x] reject/skip beyond a configurable threshold before `readFileSync`/`hashFile`

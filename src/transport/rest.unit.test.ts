@@ -282,6 +282,19 @@ describe('rest', () => {
     expect(res.status).toBe(400)
   })
 
+  test('POST /admin/kbs/:kb/documents should return 413 on a document above MAX_FILE_BYTES', async () => {
+    mockedAdd.mockRejectedValueOnce(new Error('document too large: 2048 bytes exceeds MAX_FILE_BYTES=1024'))
+    const res = await fetch(`${base}/admin/kbs/docs/documents`, {
+      method: 'POST',
+      headers: { ...AUTH, ...JSON_HEADERS },
+      body: JSON.stringify({ path: 'big.md', content: 'hello' }),
+    })
+    expect(res.status).toBe(413)
+    const body = (await res.json()) as { error: string; maxFileBytes: number }
+    expect(body.error).toBe('document too large')
+    expect(body.maxFileBytes).toBeGreaterThan(0)
+  })
+
   test('POST /admin/kbs/:kb/documents should return 500 when addDocument throws', async () => {
     mockedAdd.mockRejectedValueOnce(new Error('boom'))
     const res = await fetch(`${base}/admin/kbs/docs/documents`, {

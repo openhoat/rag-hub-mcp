@@ -22,6 +22,11 @@ const EnvSchema = z.object({
   // chunks can stay whole while search snippets stay small. Use rag_read for
   // the full document content.
   SEARCH_SNIPPET_MAX_CHARS: z.coerce.number().int().min(1).default(1000),
+  // Ceiling on one document, in bytes, enforced before the file is read and
+  // hashed. A knowledge base is a shared, mutable folder, so an oversized file
+  // must never reach readFileSync: above the bound the scan excludes the file
+  // (and evicts it when already indexed) and rag_add_document refuses it.
+  MAX_FILE_BYTES: z.coerce.number().int().min(1).default(10_485_760),
   CONTEXTUAL_CHUNKING_ENABLED: z
     .enum(['true', 'false'])
     .optional()

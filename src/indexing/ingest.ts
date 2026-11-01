@@ -32,6 +32,14 @@ interface KnownFile {
 
 const SCAN_IGNORE = ['.git/**', 'node_modules/**', '__pycache__/**', '.DS_Store', 'Thumbs.db', '.env', '.secrets']
 
+/**
+ * A document is bounded before it is read: `hashFile` and the binary peek both
+ * load the whole file, and a knowledge base is a shared folder that anyone can
+ * write to. Checked against `stat` at scan time and against the incoming
+ * payload at write time, so an oversized file never gets read or stored.
+ */
+const isOversized = (bytes: number): boolean => bytes > env.MAX_FILE_BYTES
+
 /** Peek at the head of a file to detect binary content — cheap, no full extract. */
 const canIndexFile = (fullPath: string): boolean => {
   if (isTextFile(fullPath)) return true
@@ -182,6 +190,13 @@ const enqueueEntry = async (data: EntryData, sha256: string): Promise<void> => {
 
 const handleEntry = async (data: EntryData): Promise<void> => {
   const { store, entry, fullPath, known, knownId, st, needsReembed, result } = data
+  if (isOversized(st.size)) {
+    logger.warn('excluded (over MAX_FILE_BYTES=%d): %s (%d bytes)', env.MAX_FILE_BYTES, entry, st.size)
+    await deleteKnownFile(store, knownId)
+    result.excluded++
+    return
+  }
+
   if (isUnchanged(known, st) && !needsReembed) {
     result.skipped++
     return
@@ -392,6 +407,10 @@ const embedOneChunk = async (text: string, index: number, signal?: AbortSignal):
 
 export const addDocument = async (store: Store, queue: JobQueue, kb: string, relPath: string, content: string, root: string = KB_ROOT) => {
   const fullPath = sanitizeRelativePath(root, kb, relPath)
+  const bytes = Buffer.byteLength(content, 'utf-8')
+  if (isOversized(bytes)) {
+    throw new Error(`document too large: ${bytes} bytes exceeds MAX_FILE_BYTES=${env.MAX_FILE_BYTES}`)
+  }
   mkdirSync(dirname(fullPath), { recursive: true })
   writeFileSync(fullPath, content, 'utf-8')
 

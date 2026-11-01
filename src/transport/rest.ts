@@ -51,6 +51,10 @@ const handleAddDocument = async (
       void reply.code(400).send({ error: 'invalid path' })
       return
     }
+    if (err instanceof Error && err.message.startsWith('document too large')) {
+      void reply.code(413).send({ error: 'document too large', maxFileBytes: env.MAX_FILE_BYTES })
+      return
+    }
     throw err
   }
   void reply.send({ status: 'queued', kb, path: relPath })

@@ -463,6 +463,64 @@ describe('addDocument', () => {
   })
 })
 
+describe('MAX_FILE_BYTES', () => {
+  /** Re-import ingest with a small bound: config is parsed once per module instance. */
+  const ingestWithLimit = async (bytes: number) => {
+    vi.stubEnv('MAX_FILE_BYTES', String(bytes))
+    vi.resetModules()
+    const mod = await import('./ingest.js')
+    vi.unstubAllEnvs()
+    return mod
+  }
+
+  test('should exclude a file above the bound without hashing it', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    writeFileSync(join(root, 'docs', 'big.md'), 'x'.repeat(2048), 'utf-8')
+    const { scanAll: scanWithBound } = await ingestWithLimit(1024)
+
+    const result = await scanWithBound(store, queue, root)
+
+    expect(result.excluded).toBe(1)
+    expect(result.enqueued).toBe(0)
+    expect(queue.enqueued).toHaveLength(0)
+  })
+
+  test('should evict an already indexed file that grows above the bound', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    const file = join(root, 'docs', 'a.md')
+    writeFileSync(file, 'x'.repeat(2048), 'utf-8')
+    await store.addKb('docs')
+    await indexFile(store, await store.getKbId('docs'), 'a.md', file, 'sha', { mtimeMs: 0, size: 2048 })
+    expect(await store.listFiles('docs')).toHaveLength(1)
+
+    const { scanAll: scanWithBound } = await ingestWithLimit(1024)
+    const result = await scanWithBound(store, queue, root)
+
+    expect(result.excluded).toBe(1)
+    expect(result.enqueued).toBe(0)
+    expect(await store.listFiles('docs')).toHaveLength(0)
+  })
+
+  test('should refuse addDocument above the bound and write nothing', async () => {
+    const setup = setupKb()
+    root = setup.root
+    store = setup.store
+    const queue = makeStubQueue()
+    const { addDocument: addWithBound } = await ingestWithLimit(16)
+
+    await expect(addWithBound(store, queue, 'docs', 'big.md', 'x'.repeat(64), root)).rejects.toThrow('document too large')
+
+    expect(existsSync(join(root, 'docs', 'big.md'))).toBe(false)
+    expect(queue.enqueued).toHaveLength(0)
+  })
+})
+
 describe('deleteDocument', () => {
   test('should remove the file, index entry, and clear queue', async () => {
     const setup = setupKb()
