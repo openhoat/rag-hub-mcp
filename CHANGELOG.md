@@ -1,3 +1,18 @@
+# [1.6.0](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.6...v1.6.0) (2026-11-01)
+
+### Chores
+
+* **changelog:** regenerate for v1.5.6 ([813db79](https://github.com/openhoat/rag-hub-mcp/commit/813db79a994e5e93726f175648f0f0fc02923e17))
+* **release:** bump version to v1.6.0 ([3de9091](https://github.com/openhoat/rag-hub-mcp/commit/3de9091480b12f2bc1c297b015463b16b8573db9))
+
+### Continuous Integration
+
+* **docker:** publish the GHCR image only ([c791ac2](https://github.com/openhoat/rag-hub-mcp/commit/c791ac2add6a5da0eafc46be9cfc6be25e15cfd0))
+
+### Features
+
+* **ingest:** bound document size with MAX_FILE_BYTES ([96bc966](https://github.com/openhoat/rag-hub-mcp/commit/96bc96653ce15230298177c68544db44d30a178e))
+
 ## [1.5.6](https://github.com/openhoat/rag-hub-mcp/compare/v1.5.5...v1.5.6) (2026-11-01)
 
 ### Chores
