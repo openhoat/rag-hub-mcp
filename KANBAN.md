@@ -23,7 +23,3 @@ released history lives in [CHANGELOG.md](CHANGELOG.md) and `git log`.
 - [ ] consider an ANN index for SQLite (or a bound + rerank)
 
 ## In Progress
-
-### #14 [PERF] Ingestion with no file size bound
-
-- [x] reject/skip beyond a configurable threshold before `readFileSync`/`hashFile`
